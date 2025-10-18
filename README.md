@@ -1,5 +1,4 @@
-# TavernRegister（中文说明）
-
+# TavernRegister
 简介
 ----
 TavernRegister 是一个独立的注册门户，用于在不修改 SillyTavern 核心代码的前提下为其创建用户账号。该服务通过模拟管理员登录并调用 SillyTavern 的内部 API（/api/users/create）来完成注册流程。界面已本地化为中文，前后端进行了必要的输入校验与日志输出。
