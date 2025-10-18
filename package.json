@@ -1,0 +1,21 @@
+{
+  "name": "tavern-register",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-contained registration portal for SillyTavern users without modifying the core server.",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+  "helmet": "^7.1.0",
+  "lodash.kebabcase": "^4.1.1",
+  "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
