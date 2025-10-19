@@ -15,6 +15,7 @@ const __dirname = path.dirname(__filename);
 
 app.use(helmet({
     contentSecurityPolicy: false,
+    originAgentCluster: false, // 禁用 Origin-Agent-Cluster 头，避免浏览器的 agent cluster 警告
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
