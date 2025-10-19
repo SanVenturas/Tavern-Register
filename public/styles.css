@@ -150,25 +150,30 @@ form {
     margin-top: 1rem;
     height: 48px;
     border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(16, 18, 26, 0.45);
-    color: var(--text);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(27, 31, 44, 0.7);
+    color: rgba(240, 244, 255, 0.85);
     font-size: 1rem;
     font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
-    transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 
 .secondary:hover {
     transform: translateY(-1px);
     border-color: var(--accent);
     color: var(--success);
+    box-shadow: 0 14px 32px rgba(108, 92, 231, 0.25);
 }
 
 .secondary.is-pending {
-    opacity: 0.75;
+    opacity: 0.7;
     cursor: wait;
     transform: none;
+    box-shadow: none;
 }
 
 .note {
