@@ -40,6 +40,11 @@ app.post('/register', async (req, res) => {
         const { handle, name, password } = sanitizeInput(req.body ?? {});
         const result = await client.registerUser({ handle, name, password });
 
+        const timestamp = new Date().toISOString();
+        const forwardedFor = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : '';
+        const clientIp = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+        console.info(`[注册审计] 时间 ${timestamp}，IP ${clientIp}，用户名 ${result.handle}`);
+
         res.status(201).json({
             success: true,
             handle: result.handle,
