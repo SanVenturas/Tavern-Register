@@ -32,6 +32,10 @@ app.get('/health', (_req, res) => {
     });
 });
 
+app.get('/', (_req, res) => {
+    res.redirect('/register');
+});
+
 app.get('/register', (_req, res) => {
     res.sendFile(registerHtmlPath);
 });
