@@ -6,7 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
 import { SillyTavernClient } from './sillyTavernClient.js';
 import { findBinding, initDb, upsertBinding } from './db.js';
-import { registerOAuthRoutes, listAvailableProviders } from './oauth.js';
+import {
+    registerOAuthRoutes,
+    listAvailableProviders,
+    getAuthorizationTicket,
+    finalizeAuthorizationTicket,
+} from './oauth.js';
 
 const config = loadConfig();
 const client = new SillyTavernClient(config);
@@ -46,24 +51,25 @@ app.get('/register', (_req, res) => {
 
 app.post('/register', async (req, res) => {
     try {
-        const { handle, name, password, provider, providerId } = sanitizeInput(req.body ?? {});
+        const { handle, name, password, ticket } = sanitizeInput(req.body ?? {});
 
-        let oauthBinding = null;
-        if (provider && providerId) {
-            oauthBinding = await ensureOAuthAvailability(provider, providerId);
+        const ticketData = getAuthorizationTicket(ticket);
+        if (!ticketData) {
+            throw new Error('授权凭据已失效或不存在，请返回授权入口重新操作');
         }
+
+        const oauthBinding = await ensureOAuthAvailability(ticketData.provider, ticketData.providerId);
 
         const result = await client.registerUser({ handle, name, password });
 
-        if (oauthBinding) {
-            await upsertBinding(oauthBinding.provider, oauthBinding.providerId, result.handle);
-        }
+        await upsertBinding(oauthBinding.provider, oauthBinding.providerId, result.handle);
+        finalizeAuthorizationTicket(ticket);
 
         res.status(201).json({
             success: true,
             handle: result.handle,
             loginUrl: `${config.baseUrl}/login`,
-            provider: oauthBinding?.provider ?? null,
+            provider: oauthBinding.provider,
         });
     } catch (error) {
         const status = deriveStatus(error);
@@ -91,9 +97,7 @@ function sanitizeInput(payload) {
     const handle = typeof payload.handle === 'string' ? payload.handle.trim() : '';
     const name = typeof payload.name === 'string' ? payload.name.trim() : '';
     const password = typeof payload.password === 'string' ? payload.password.trim() : '';
-    const provider = typeof payload.provider === 'string' ? payload.provider.trim().toLowerCase() : '';
-    const pidFallback = typeof payload.pid === 'string' ? payload.pid.trim() : '';
-    const providerId = typeof payload.providerId === 'string' ? payload.providerId.trim() : pidFallback;
+    const ticket = typeof payload.ticket === 'string' ? payload.ticket.trim() : '';
 
     if (!handle) {
         throw new Error('用户标识不能为空');
@@ -119,16 +123,15 @@ function sanitizeInput(payload) {
         throw new Error('密码过长（最多 128 个字符）');
     }
 
-    if ((provider && !providerId) || (!provider && providerId)) {
-        throw new Error('OAuth 参数不完整，请重新授权');
+    if (!ticket) {
+        throw new Error('缺少授权凭据，请重新完成第三方登录');
     }
 
     return {
         handle,
         name,
         password,
-        provider,
-        providerId,
+        ticket,
     };
 }
 
@@ -153,7 +156,7 @@ function deriveStatus(error) {
         return 502;
     }
 
-    if (error.message.includes('OAuth')) {
+    if (error.message.includes('OAuth') || error.message.includes('授权')) {
         return 400;
     }
 

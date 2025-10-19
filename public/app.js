@@ -50,15 +50,11 @@ function deriveDefaultHandle(username, provider, providerId) {
 document.addEventListener('DOMContentLoaded', () => {
     const formElement = document.getElementById('register-form');
     const loginLinkElement = document.getElementById('login-link');
-    const providerInput = document.getElementById('provider');
-    const providerIdInput = document.getElementById('providerId');
-    const pidInput = document.getElementById('pid');
+    const ticketInput = document.getElementById('ticket');
 
     const form = formElement instanceof HTMLFormElement ? formElement : null;
     const loginLink = loginLinkElement instanceof HTMLAnchorElement ? loginLinkElement : null;
-    const providerField = providerInput instanceof HTMLInputElement ? providerInput : null;
-    const providerIdField = providerIdInput instanceof HTMLInputElement ? providerIdInput : null;
-    const pidField = pidInput instanceof HTMLInputElement ? pidInput : null;
+    const ticketField = ticketInput instanceof HTMLInputElement ? ticketInput : null;
 
     const params = new URLSearchParams(window.location.search);
     const statusParam = params.get('status');
@@ -73,42 +69,70 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    const provider = params.get('provider');
-    const providerId = params.get('pid') ?? params.get('providerId');
-    const username = params.get('username') ?? '';
-
-    if (!provider || !providerId) {
+    const ticket = params.get('ticket')?.trim();
+    if (!ticket) {
         window.location.replace('/');
         return;
     }
 
-    if (providerField) {
-        providerField.value = provider;
-    }
-    if (providerIdField) {
-        providerIdField.value = providerId;
-    }
-    if (pidField) {
-        pidField.value = providerId;
+    if (ticketField) {
+        ticketField.value = ticket;
     }
 
-    clearQueryString();
+    let authorization = null;
 
-    if (form) {
-        const nameInput = form.querySelector('input[name="name"]');
-        const handleInput = form.querySelector('input[name="handle"]');
+    async function loadAuthorization() {
+        try {
+            const response = await fetch(`/oauth/authorization/${encodeURIComponent(ticket)}`, {
+                headers: { accept: 'application/json' },
+            });
 
-        const defaultDisplayName = username || `${provider} 用户`;
-        const defaultHandle = deriveDefaultHandle(username, provider, providerId);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
 
-        if (nameInput instanceof HTMLInputElement && !nameInput.value) {
-            nameInput.value = defaultDisplayName.slice(0, 64);
+            const data = await response.json();
+            if (!data?.success || !data.authorization) {
+                throw new Error('无法获取授权信息，请重新授权');
+            }
+
+            authorization = {
+                provider: data.authorization.provider,
+                providerId: data.authorization.providerId,
+                username: data.authorization.username ?? '',
+            };
+
+            clearQueryString();
+
+            if (form) {
+                const nameInput = form.querySelector('input[name="name"]');
+                const handleInput = form.querySelector('input[name="handle"]');
+
+                const defaultDisplayName = authorization.username || `${authorization.provider} 用户`;
+                const defaultHandle = deriveDefaultHandle(
+                    authorization.username,
+                    authorization.provider,
+                    authorization.providerId,
+                );
+
+                if (nameInput instanceof HTMLInputElement && !nameInput.value) {
+                    nameInput.value = defaultDisplayName.slice(0, 64);
+                }
+
+                if (handleInput instanceof HTMLInputElement && !handleInput.value) {
+                    handleInput.value = defaultHandle;
+                }
+            }
+        } catch (error) {
+            console.error('加载授权信息失败：', error);
+            setStatus('授权信息已失效或不可用，请返回授权入口重新操作。', true);
+            setTimeout(() => {
+                window.location.replace('/');
+            }, 4000);
         }
-
-        if (handleInput instanceof HTMLInputElement && !handleInput.value) {
-            handleInput.value = defaultHandle;
-        }
     }
+
+    loadAuthorization();
 
     if (loginLink) {
         fetch('/health', { headers: { accept: 'application/json' } })
@@ -131,6 +155,11 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         setStatus('');
+
+        if (!authorization || !ticketField?.value) {
+            setStatus('授权信息缺失，请返回授权入口重新操作。', true);
+            return;
+        }
 
         const formData = new FormData(form);
         const nameValue = formData.get('name');
@@ -182,8 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
             name: payload.name,
             handle: payload.handle,
             password: payload.password,
-            provider,
-            providerId,
+            ticket: ticketField.value,
         };
 
         try {

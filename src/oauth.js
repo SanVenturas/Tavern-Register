@@ -4,7 +4,10 @@ import fetch from 'node-fetch';
 import { findBinding } from './db.js';
 
 const STATE_TTL_MS = 5 * 60 * 1000;
+const AUTH_TICKET_TTL_MS = 5 * 60 * 1000;
+
 const stateStore = new Map();
+const authorizationTickets = new Map();
 const availableProviders = [];
 
 const PROVIDERS = [
@@ -107,10 +110,14 @@ export function registerOAuthRoutes(app) {
                     return res.redirect(`/register?${params.toString()}`);
                 }
 
-                const params = new URLSearchParams({
+                const ticket = createAuthorizationTicket({
                     provider: provider.name,
-                    pid: user.id,
+                    providerId: user.id,
                     username: user.username ?? '',
+                });
+
+                const params = new URLSearchParams({
+                    ticket,
                 });
                 return res.redirect(`/register?${params.toString()}`);
             } catch (error) {
@@ -119,10 +126,83 @@ export function registerOAuthRoutes(app) {
             }
         });
     }
+
+    app.get('/oauth/authorization/:ticket', (req, res) => {
+        const ticket = req.params.ticket;
+        const data = getAuthorizationTicket(ticket);
+        if (!data) {
+            return res.status(404).json({
+                success: false,
+                message: '授权凭据已失效或不存在，请重新授权',
+            });
+        }
+
+        res.json({
+            success: true,
+            authorization: {
+                provider: data.provider,
+                providerId: data.providerId,
+                username: data.username,
+            },
+        });
+    });
 }
 
 export function listAvailableProviders() {
     return availableProviders.slice();
+}
+
+export function getAuthorizationTicket(ticket) {
+    if (!ticket) {
+        return undefined;
+    }
+
+    const entry = authorizationTickets.get(ticket);
+    if (!entry) {
+        return undefined;
+    }
+
+    if (entry.used) {
+        return undefined;
+    }
+
+    if (Date.now() > entry.expiresAt) {
+        authorizationTickets.delete(ticket);
+        return undefined;
+    }
+
+    return {
+        provider: entry.provider,
+        providerId: entry.providerId,
+        username: entry.username,
+    };
+}
+
+export function finalizeAuthorizationTicket(ticket) {
+    if (!ticket) {
+        return;
+    }
+
+    const entry = authorizationTickets.get(ticket);
+    if (!entry) {
+        return;
+    }
+
+    entry.used = true;
+    authorizationTickets.delete(ticket);
+}
+
+function createAuthorizationTicket(details) {
+    const ticket = crypto.randomUUID();
+    authorizationTickets.set(ticket, {
+        provider: details.provider,
+        providerId: details.providerId,
+        username: details.username,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + AUTH_TICKET_TTL_MS,
+        used: false,
+    });
+    return ticket;
 }
 
 function createState() {
@@ -177,10 +257,17 @@ async function fetchUserInfo(provider, token) {
 }
 
 setInterval(() => {
-    const cutoff = Date.now() - STATE_TTL_MS;
+    const cutoffState = Date.now() - STATE_TTL_MS;
     for (const [state, createdAt] of stateStore.entries()) {
-        if (createdAt < cutoff) {
+        if (createdAt < cutoffState) {
             stateStore.delete(state);
+        }
+    }
+
+    const now = Date.now();
+    for (const [ticket, entry] of authorizationTickets.entries()) {
+        if (entry.used || entry.expiresAt <= now) {
+            authorizationTickets.delete(ticket);
         }
     }
 }, 60 * 1000).unref();
