@@ -35,8 +35,12 @@ export function loadConfig() {
         throw new Error('PORT 必须是大于 0 的数字');
     }
 
+    const listenHostEnv = process.env.LISTEN_HOST ?? process.env.HOST ?? '0.0.0.0';
+    const listenHost = listenHostEnv.trim() || '0.0.0.0';
+
     return {
         port,
+        host: listenHost,
         baseUrl,
         adminHandle: adminHandleEnv.trim(),
         adminPassword: adminPasswordEnv,

@@ -68,8 +68,11 @@ app.use((req, res) => {
 });
 
 const port = config.port;
-app.listen(port, () => {
-    console.log(`TavernRegister listening on http://localhost:${port}`);
+const host = config.host ?? '0.0.0.0';
+const displayHost = host === '0.0.0.0' || host === '::' ? 'localhost' : host.includes(':') ? `[${host}]` : host;
+
+app.listen(port, host, () => {
+    console.log(`TavernRegister listening on http://${displayHost}:${port} (bound to ${host})`);
 });
 
 function sanitizeInput(payload) {
