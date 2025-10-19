@@ -152,16 +152,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (cancelButton) {
         cancelButton.addEventListener('click', async () => {
+            const ticketValue = ticketField?.value || ticket;
             cancelButton.disabled = true;
+            cancelButton.classList.add('is-pending');
+            cancelButton.textContent = '正在取消授权…';
             setStatus('正在取消当前授权，请稍候…');
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 4000);
+
             try {
-                await fetch(`/oauth/authorization/${encodeURIComponent(ticket)}/cancel`, {
-                    method: 'POST',
-                    headers: { accept: 'application/json' },
-                });
+                if (ticketValue) {
+                    const response = await fetch(`/oauth/authorization/${encodeURIComponent(ticketValue)}/cancel`, {
+                        method: 'POST',
+                        headers: {
+                            accept: 'application/json',
+                            'content-type': 'application/json',
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({}),
+                        signal: controller.signal,
+                    });
+
+                    if (!response.ok) {
+                        console.warn('取消授权请求返回非成功状态：', response.status);
+                    }
+                }
             } catch (error) {
                 console.error('取消授权失败：', error);
             } finally {
+                clearTimeout(timeout);
                 window.location.replace('/?status=cancelled');
             }
         });
