@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = formElement instanceof HTMLFormElement ? formElement : null;
     const loginLink = loginLinkElement instanceof HTMLAnchorElement ? loginLinkElement : null;
     const ticketField = ticketInput instanceof HTMLInputElement ? ticketInput : null;
-    const cancelButton = cancelButtonElement instanceof HTMLButtonElement ? cancelButtonElement : null;
+    const cancelButton = cancelButtonElement ?? null;
 
     const params = new URLSearchParams(window.location.search);
     const statusParam = params.get('status');
@@ -150,12 +150,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     }
 
-    if (cancelButton) {
+    if (cancelButton instanceof HTMLElement) {
         cancelButton.addEventListener('click', async () => {
             const ticketValue = ticketField?.value || ticket;
             cancelButton.disabled = true;
             cancelButton.classList.add('is-pending');
             cancelButton.textContent = '正在取消授权…';
+            cancelButton.setAttribute('aria-busy', 'true');
             setStatus('正在取消当前授权，请稍候…');
 
             const controller = typeof AbortController === 'function' ? new AbortController() : null;
@@ -188,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (timeout) {
                     clearTimeout(timeout);
                 }
+                cancelButton.removeAttribute('aria-busy');
                 window.location.replace('/?status=cancelled');
             }
         });
