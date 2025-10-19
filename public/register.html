@@ -11,15 +11,14 @@
     <main class="layout">
         <section class="card">
             <h1>创建 SillyTavern 账号</h1>
-            <p class="subtitle">授权成功，已为你准备好注册信息。请确认或微调后提交，以完成账号创建。</p>
+            <p class="subtitle">请填写以下信息完成注册，所有字段均为必填。</p>
 
             <form id="register-form" novalidate>
-                <input type="hidden" id="ticket" name="ticket" value="">
 
                 <label class="field">
                     <span>显示名称</span>
                     <input type="text" name="name" maxlength="64" required autocomplete="name" placeholder="例如：小明">
-                    <small class="hint">已根据 GitHub 用户名预填，可自行调整。</small>
+                    <small class="hint">这是在 SillyTavern 中展示给其他人的名称。</small>
                 </label>
 
                 <label class="field">
@@ -46,14 +45,6 @@
                 注册成功后可前往
                 <a id="login-link" href="#" target="_blank" rel="noopener">SillyTavern 登录页</a>
                 完成登录。
-            </p>
-
-            <button type="button" id="cancel-authorization" class="secondary">取消当前授权</button>
-
-            <p class="note">
-                如果需要切换其他 GitHub 账号，可
-                <a href="/">返回授权入口</a>
-                重新授权。
             </p>
 
             <div id="status" role="status" aria-live="polite"></div>

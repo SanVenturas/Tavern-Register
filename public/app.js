@@ -23,118 +23,11 @@ function normalizeHandle(value) {
         .slice(0, 64);
 }
 
-function clearQueryString() {
-    if (!window.location.search) {
-        return;
-    }
-
-    const url = new URL(window.location.href);
-    url.search = '';
-    window.history.replaceState({}, '', url);
-}
-
-function deriveDefaultHandle(username, provider, providerId) {
-    const normalized = normalizeHandle(username);
-    if (normalized) {
-        return normalized;
-    }
-
-    const fallback = normalizeHandle(`${provider}-${providerId}`);
-    if (fallback) {
-        return fallback;
-    }
-
-    return providerId?.toLowerCase().slice(0, 64) ?? '';
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     const formElement = document.getElementById('register-form');
     const loginLinkElement = document.getElementById('login-link');
-    const ticketInput = document.getElementById('ticket');
-    const cancelButtonElement = document.getElementById('cancel-authorization');
-
     const form = formElement instanceof HTMLFormElement ? formElement : null;
     const loginLink = loginLinkElement instanceof HTMLAnchorElement ? loginLinkElement : null;
-    const ticketField = ticketInput instanceof HTMLInputElement ? ticketInput : null;
-    const cancelButton = cancelButtonElement ?? null;
-
-    const params = new URLSearchParams(window.location.search);
-    const statusParam = params.get('status');
-
-    if (statusParam === 'bound') {
-        const handle = params.get('handle');
-        const handleText = handle ? `“${handle}”` : '某个已存在的账户';
-        setStatus(`该第三方账号已绑定酒馆账号 ${handleText}，无法重复绑定。`, true);
-        setTimeout(() => {
-            window.location.replace('/');
-        }, 4000);
-        return;
-    }
-
-    const ticket = params.get('ticket')?.trim();
-    if (!ticket) {
-        window.location.replace('/?status=invalid-ticket');
-        return;
-    }
-
-    if (ticketField) {
-        ticketField.value = ticket;
-    }
-
-    let authorization = null;
-
-    async function loadAuthorization() {
-        try {
-            const response = await fetch(`/oauth/authorization/${encodeURIComponent(ticket)}`, {
-                headers: { accept: 'application/json' },
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
-            if (!data?.success || !data.authorization) {
-                throw new Error('无法获取授权信息，请重新授权');
-            }
-
-            authorization = {
-                provider: data.authorization.provider,
-                providerId: data.authorization.providerId,
-                username: data.authorization.username ?? '',
-            };
-
-            clearQueryString();
-
-            if (form) {
-                const nameInput = form.querySelector('input[name="name"]');
-                const handleInput = form.querySelector('input[name="handle"]');
-
-                const defaultDisplayName = authorization.username || `${authorization.provider} 用户`;
-                const defaultHandle = deriveDefaultHandle(
-                    authorization.username,
-                    authorization.provider,
-                    authorization.providerId,
-                );
-
-                if (nameInput instanceof HTMLInputElement && !nameInput.value) {
-                    nameInput.value = defaultDisplayName.slice(0, 64);
-                }
-
-                if (handleInput instanceof HTMLInputElement && !handleInput.value) {
-                    handleInput.value = defaultHandle;
-                }
-            }
-        } catch (error) {
-            console.error('加载授权信息失败：', error);
-            setStatus('授权信息已失效或不可用，请返回授权入口重新操作。', true);
-            setTimeout(() => {
-                window.location.replace('/?status=invalid-ticket');
-            }, 4000);
-        }
-    }
-
-    loadAuthorization();
 
     if (loginLink) {
         fetch('/health', { headers: { accept: 'application/json' } })
@@ -150,71 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     }
 
-    if (cancelButton instanceof HTMLElement) {
-        cancelButton.addEventListener('click', async () => {
-            const ticketValue = ticketField?.value || ticket;
-            cancelButton.disabled = true;
-            cancelButton.classList.add('is-pending');
-            cancelButton.textContent = '正在取消授权…';
-            cancelButton.setAttribute('aria-busy', 'true');
-            setStatus('正在取消当前授权，请稍候…');
-
-            console.log('[DEBUG] Cancelling authorization for ticket:', ticketValue);
-
-            const controller = typeof AbortController === 'function' ? new AbortController() : null;
-            const timeout = controller ? setTimeout(() => controller.abort(), 4000) : null;
-
-            try {
-                if (ticketValue) {
-                    const fetchOptions = {
-                        method: 'POST',
-                        headers: {
-                            accept: 'application/json',
-                            'content-type': 'application/json',
-                        },
-                        credentials: 'same-origin',
-                        body: '{}',
-                    };
-
-                    if (controller) {
-                        fetchOptions.signal = controller.signal;
-                    }
-
-                    const response = await fetch(`/oauth/authorization/${encodeURIComponent(ticketValue)}/cancel`, fetchOptions);
-                    
-                    console.log('[DEBUG] Cancel request response status:', response.status);
-                    const responseBody = await response.text();
-                    console.log('[DEBUG] Cancel request response body:', responseBody);
-
-                    if (!response.ok) {
-                        console.warn('取消授权请求返回非成功状态：', response.status);
-                        setStatus(`取消授权失败: ${response.status}。详情请查看控制台。`, true);
-                    } else {
-                        setStatus('授权已取消。页面将不会自动跳转（调试模式）。', false);
-                    }
-                } else {
-                    console.warn('[DEBUG] No ticket value found for cancellation.');
-                    setStatus('无法取消授权：缺少票据。', true);
-                }
-            } catch (error) {
-                console.error('取消授权失败：', error);
-                setStatus(`取消授权时发生脚本错误: ${error.message}。`, true);
-            } finally {
-                if (timeout) {
-                    clearTimeout(timeout);
-                }
-                cancelButton.removeAttribute('aria-busy');
-                // window.location.replace('/?status=cancelled'); // DEBUG: Temporarily disabled
-                console.log('[DEBUG] Cancellation flow finished. Redirect is disabled.');
-                
-                // Restore button state for re-testing
-                cancelButton.disabled = false;
-                cancelButton.classList.remove('is-pending');
-                cancelButton.textContent = '取消当前授权';
-            }
-        });
-    }
-
     if (!form) {
         return;
     }
@@ -222,11 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         setStatus('');
-
-        if (!authorization || !ticketField?.value) {
-            setStatus('授权信息缺失，请返回授权入口重新操作。', true);
-            return;
-        }
 
         const formData = new FormData(form);
         const nameValue = formData.get('name');
@@ -278,7 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
             name: payload.name,
             handle: payload.handle,
             password: payload.password,
-            ticket: ticketField.value,
         };
 
         try {
@@ -306,7 +128,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             setTimeout(() => {
-                window.location.replace('/');
+                const originalHref = loginLink?.getAttribute('href');
+                if (loginLink && originalHref && originalHref !== '#') {
+                    window.location.replace(loginLink.href);
+                }
             }, 3500);
         } catch (error) {
             const message = error instanceof Error ? error.message : '发生未知错误，请稍后再试。';

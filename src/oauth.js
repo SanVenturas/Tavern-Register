@@ -193,21 +193,16 @@ export function finalizeAuthorizationTicket(ticket) {
 }
 
 export function cancelAuthorizationTicket(ticket) {
-    console.log(`[DEBUG] Attempting to cancel authorization ticket: ${ticket}`);
     if (!ticket) {
-        console.log('[DEBUG] Cancellation failed: No ticket provided.');
         return false;
     }
 
     const hasTicket = authorizationTickets.has(ticket);
     if (!hasTicket) {
-        console.log(`[DEBUG] Cancellation failed: Ticket "${ticket}" not found in store.`);
-        console.log(`[DEBUG] Current tickets in store:`, Array.from(authorizationTickets.keys()));
         return false;
     }
 
     authorizationTickets.delete(ticket);
-    console.log(`[DEBUG] Successfully cancelled and deleted ticket: ${ticket}`);
     return true;
 }
 

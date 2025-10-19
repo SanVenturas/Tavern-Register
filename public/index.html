@@ -3,23 +3,49 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>TavernRegister 授权入口</title>
+    <title>TavernRegister 账号注册</title>
     <link rel="stylesheet" href="styles.css">
-    <script defer src="landing.js"></script>
+    <script defer src="app.js"></script>
 </head>
 <body>
     <main class="layout">
         <section class="card">
-            <h1>TavernRegister 授权中心</h1>
-            <p class="subtitle">请先使用第三方账号授权，以获取唯一身份标识，随后将自动跳转至酒馆账号注册页面。</p>
+            <h1>创建 SillyTavern 账号</h1>
+            <p class="subtitle">请填写以下信息完成注册，所有字段均为必填。</p>
 
-            <section class="oauth-box">
-                <p class="oauth-title">请选择授权方式：</p>
-                <div class="oauth-buttons" id="oauth-buttons"></div>
-                <p class="oauth-status" id="oauth-status"></p>
-            </section>
+            <form id="register-form" novalidate>
 
-            <p class="note">完成授权后，将自动跳转到注册页，系统会根据授权信息预填显示名称与用户标识。</p>
+                <label class="field">
+                    <span>显示名称</span>
+                    <input type="text" name="name" maxlength="64" required autocomplete="name" placeholder="例如：小明">
+                    <small class="hint">这是在 SillyTavern 中展示给其他人的名称。</small>
+                </label>
+
+                <label class="field">
+                    <span>用户标识</span>
+                    <input type="text" name="handle" maxlength="64" required autocomplete="username" placeholder="例如：xiao-ming">
+                    <small class="hint">将自动转换为小写短横线格式（kebab-case）。</small>
+                </label>
+
+                <label class="field">
+                    <span>登录密码</span>
+                    <input type="password" name="password" maxlength="128" autocomplete="new-password" placeholder="请输入密码" required>
+                    <small class="hint">请设置长度合适的密码，妥善保管。</small>
+                </label>
+
+                <label class="field">
+                    <span>确认密码</span>
+                    <input type="password" name="confirm" maxlength="128" autocomplete="new-password" placeholder="再次输入密码" required>
+                </label>
+
+                <button type="submit" class="primary">立即注册</button>
+            </form>
+
+            <p class="note">
+                注册成功后可前往
+                <a id="login-link" href="#" target="_blank" rel="noopener">SillyTavern 登录页</a>
+                完成登录。
+            </p>
 
             <div id="status" role="status" aria-live="polite"></div>
         </section>
