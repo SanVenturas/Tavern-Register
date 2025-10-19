@@ -51,10 +51,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const formElement = document.getElementById('register-form');
     const loginLinkElement = document.getElementById('login-link');
     const ticketInput = document.getElementById('ticket');
+    const cancelButtonElement = document.getElementById('cancel-authorization');
 
     const form = formElement instanceof HTMLFormElement ? formElement : null;
     const loginLink = loginLinkElement instanceof HTMLAnchorElement ? loginLinkElement : null;
     const ticketField = ticketInput instanceof HTMLInputElement ? ticketInput : null;
+    const cancelButton = cancelButtonElement instanceof HTMLButtonElement ? cancelButtonElement : null;
 
     const params = new URLSearchParams(window.location.search);
     const statusParam = params.get('status');
@@ -71,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const ticket = params.get('ticket')?.trim();
     if (!ticket) {
-        window.location.replace('/');
+        window.location.replace('/?status=invalid-ticket');
         return;
     }
 
@@ -127,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('加载授权信息失败：', error);
             setStatus('授权信息已失效或不可用，请返回授权入口重新操作。', true);
             setTimeout(() => {
-                window.location.replace('/');
+                window.location.replace('/?status=invalid-ticket');
             }, 4000);
         }
     }
@@ -146,6 +148,23 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(() => {
                 /* 忽略健康检查失败，页面仍可手动填写登录地址 */
             });
+    }
+
+    if (cancelButton) {
+        cancelButton.addEventListener('click', async () => {
+            cancelButton.disabled = true;
+            setStatus('正在取消当前授权，请稍候…');
+            try {
+                await fetch(`/oauth/authorization/${encodeURIComponent(ticket)}/cancel`, {
+                    method: 'POST',
+                    headers: { accept: 'application/json' },
+                });
+            } catch (error) {
+                console.error('取消授权失败：', error);
+            } finally {
+                window.location.replace('/?status=cancelled');
+            }
+        });
     }
 
     if (!form) {

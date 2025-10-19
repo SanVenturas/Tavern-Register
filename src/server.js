@@ -11,6 +11,7 @@ import {
     listAvailableProviders,
     getAuthorizationTicket,
     finalizeAuthorizationTicket,
+    cancelAuthorizationTicket,
 } from './oauth.js';
 
 const config = loadConfig();
@@ -45,8 +46,34 @@ app.get('/health', (_req, res) => {
     });
 });
 
-app.get('/register', (_req, res) => {
+app.get('/register', (req, res) => {
+    const status = typeof req.query.status === 'string' ? req.query.status : '';
+    if (status === 'bound') {
+        return res.sendFile(registerHtmlPath);
+    }
+
+    const ticket = typeof req.query.ticket === 'string' ? req.query.ticket.trim() : '';
+    const ticketData = ticket ? getAuthorizationTicket(ticket) : undefined;
+    if (!ticketData) {
+        return res.redirect(303, '/?status=invalid-ticket');
+    }
+
     res.sendFile(registerHtmlPath);
+});
+
+app.post('/oauth/authorization/:ticket/cancel', (req, res) => {
+    const ticket = typeof req.params.ticket === 'string' ? req.params.ticket.trim() : '';
+    const cancelled = cancelAuthorizationTicket(ticket);
+    if (!cancelled) {
+        return res.status(404).json({
+            success: false,
+            message: '授权凭据不存在或已失效',
+        });
+    }
+
+    res.json({
+        success: true,
+    });
 });
 
 app.post('/register', async (req, res) => {

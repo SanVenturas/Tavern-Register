@@ -45,6 +45,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const handleText = handle ? `“${handle}”` : '某个已存在的账户';
         setStatus(`该第三方账号已绑定酒馆账号 ${handleText}，无法重复绑定。`, true);
         clearQueryString();
+    } else if (status === 'cancelled') {
+        setStatus('已取消当前授权，您可以重新选择第三方账号。', false);
+        clearQueryString();
+    } else if (status === 'invalid-ticket') {
+        setStatus('授权凭据已失效，请重新进行第三方授权。', true);
+        clearQueryString();
     }
 
     if (!oauthButtonsContainer || !oauthBoxElement) {

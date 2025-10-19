@@ -145,6 +145,24 @@ form {
     box-shadow: 0 18px 40px rgba(108, 92, 231, 0.35);
 }
 
+.secondary {
+    width: 100%;
+    margin-top: 1rem;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: transparent;
+    color: var(--text);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.secondary:hover {
+    border-color: var(--accent);
+    color: var(--success);
+}
+
 .note {
     margin-top: 2rem;
     font-size: 0.95rem;

@@ -192,6 +192,20 @@ export function finalizeAuthorizationTicket(ticket) {
     authorizationTickets.delete(ticket);
 }
 
+export function cancelAuthorizationTicket(ticket) {
+    if (!ticket) {
+        return false;
+    }
+
+    const hasTicket = authorizationTickets.has(ticket);
+    if (!hasTicket) {
+        return false;
+    }
+
+    authorizationTickets.delete(ticket);
+    return true;
+}
+
 function createAuthorizationTicket(details) {
     const ticket = crypto.randomUUID();
     authorizationTickets.set(ticket, {
