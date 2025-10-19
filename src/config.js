@@ -16,7 +16,19 @@ export function loadConfig() {
         throw new Error(`缺少必要的环境变量：${formatted}`);
     }
 
-    const baseUrl = process.env.SILLYTAVERN_BASE_URL.trim().replace(/\/$/, '');
+    const baseUrlEnv = process.env.SILLYTAVERN_BASE_URL ?? '';
+    const adminHandleEnv = process.env.SILLYTAVERN_ADMIN_HANDLE ?? '';
+    const adminPasswordEnv = process.env.SILLYTAVERN_ADMIN_PASSWORD ?? '';
+
+    const rawBaseUrl = baseUrlEnv.trim();
+    let parsedBaseUrl;
+    try {
+        parsedBaseUrl = new URL(rawBaseUrl);
+    } catch (error) {
+        throw new Error('SILLYTAVERN_BASE_URL 必须是包含协议的完整网址，例如 https://example.com:8000');
+    }
+
+    const baseUrl = parsedBaseUrl.toString().replace(/\/$/, '');
     const port = Number.parseInt(process.env.PORT ?? '3070', 10);
 
     if (!Number.isFinite(port) || port <= 0) {
@@ -26,7 +38,7 @@ export function loadConfig() {
     return {
         port,
         baseUrl,
-        adminHandle: process.env.SILLYTAVERN_ADMIN_HANDLE.trim(),
-        adminPassword: process.env.SILLYTAVERN_ADMIN_PASSWORD,
+        adminHandle: adminHandleEnv.trim(),
+        adminPassword: adminPasswordEnv,
     };
 }

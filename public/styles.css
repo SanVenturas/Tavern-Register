@@ -49,6 +49,51 @@ body {
     color: rgba(240, 244, 255, 0.75);
 }
 
+.oauth-box {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.oauth-title {
+    margin: 0 0 0.75rem 0;
+    font-weight: 600;
+    color: rgba(240, 244, 255, 0.85);
+}
+
+.oauth-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.oauth-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    padding: 0.45rem 1.2rem;
+    background: rgba(16, 18, 26, 0.5);
+    color: var(--text);
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.oauth-button:hover {
+    transform: translateY(-1px);
+    border-color: var(--accent);
+}
+
+.oauth-status {
+    margin: 0;
+    font-size: 0.9rem;
+    color: rgba(240, 244, 255, 0.7);
+}
+
 form {
     display: grid;
     gap: 1.25rem;

@@ -6,6 +6,7 @@ dist/
 build/
 .cache/
 coverage/
+data/
 
 # 日志
 logs/
