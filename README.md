@@ -22,58 +22,11 @@ chmod +x start.sh
 ./start.sh
 ```
 
-在 Windows（PowerShell）：
-
-```powershell
-     Description=TavernRegister portal
-     After=network.target
-
-
-脚本会在首次运行时自动安装 npm 依赖（如果未检测到 `node_modules`），然后通过 `npm run start` 启动后端服务。若你更喜欢手动控制，也可以使用下面的命令替代脚本步骤：
-
-```bash
-npm install
-npm run start
-```
-
 启动后，默认监听 `PORT`（默认 3070），浏览器访问：
 
 http://localhost:3070/
-     [Service]
-       WorkingDirectory=/opt/Tavern-Register
-       ExecStart=/usr/bin/npm run start -- --color=false
-     EnvironmentFile=/opt/Tavern-Register/.env
-     Restart=always
-     User=www-data
 
-     [Install]
-     WantedBy=multi-user.target
-     ```
-     ```bash
-     sudo systemctl daemon-reload
-     sudo systemctl enable --now tavern-register
-     ```
-    - 或使用 pm2：
-       ```bash
-       pm2 start npm --name tavern-register -- run start
-     pm2 save
-     ```
-5. **反向代理示例（Nginx）**
-   ```nginx
-   server {
-       listen 80;
-       server_name register.example.com;
-
-       location / {
-           proxy_pass http://127.0.0.1:3070;
-           proxy_set_header Host $host;
-           proxy_set_header X-Real-IP $remote_addr;
-           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-           proxy_set_header X-Forwarded-Proto $scheme;
-       }
-   }
-   ```
-   配合 certbot/caddy 等即可获得 HTTPS 证书。完成后访问 `https://register.example.com/` 即可。
+有关生产部署（systemd / pm2 / Nginx 反向代理）请参阅上文的“服务器部署”小节，其中包含 systemd 单元示例、pm2 启动方法以及 Nginx 配置片段。
 
 `.env` 配置说明
 ----
