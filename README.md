@@ -2,7 +2,7 @@
 
 简介
 ----
-TavernRegister 是一个独立的注册门户，可在不修改 SillyTavern 核心代码的前提下创建用户账号。服务端会以管理员身份调用 SillyTavern 的内部 API（`/api/users/create`），前端界面与提示均已中文化，同时提供基本的输入校验与日志输出。
+TavernRegister 是一个极简的独立注册门户，可在不修改 SillyTavern 核心代码的情况下批量创建用户账号。后端会以管理员身份调用 SillyTavern 的内部 API（`/api/users/create`），前端界面与提示为中文，内置基础的输入校验与日志输出，便于在多用户环境下快速开放注册入口。
 
 工作原理
 ----
@@ -10,30 +10,70 @@ TavernRegister 是一个独立的注册门户，可在不修改 SillyTavern 核�
 2. 注册时将提交的显示名称、用户标识、密码发送到 SillyTavern。
 3. 调用 `/api/users/create` 创建账号，并返回登录入口信息。
 
-快速开始
+快速开始（使用仓库内启动脚本）
 ----
-1. 进入目录：
-   ```powershell
-   cd e:\ruanjian\multy\SillyTavern\TavernRegister
+本项目包含平台对应的启动脚本：Unix/macOS 使用 `start.sh`。优先使用仓库自带脚本来安装依赖并启动服务，脚本已包含常见检查并能简化部署流程。
+
+在 Unix / Linux / macOS 环境：
+
+```bash
+# 赋予执行权限（首次运行时）
+chmod +x start.sh
+./start.sh
+```
+
+在 Windows（PowerShell）：
+
+```powershell
+     Description=TavernRegister portal
+     After=network.target
+
+
+脚本会在首次运行时自动安装 npm 依赖（如果未检测到 `node_modules`），然后通过 `npm run start` 启动后端服务。若你更喜欢手动控制，也可以使用下面的命令替代脚本步骤：
+
+```bash
+npm install
+npm run start
+```
+
+启动后，默认监听 `PORT`（默认 3070），浏览器访问：
+
+http://localhost:3070/
+     [Service]
+       WorkingDirectory=/opt/Tavern-Register
+       ExecStart=/usr/bin/npm run start -- --color=false
+     EnvironmentFile=/opt/Tavern-Register/.env
+     Restart=always
+     User=www-data
+
+     [Install]
+     WantedBy=multi-user.target
+     ```
+     ```bash
+     sudo systemctl daemon-reload
+     sudo systemctl enable --now tavern-register
+     ```
+    - 或使用 pm2：
+       ```bash
+       pm2 start npm --name tavern-register -- run start
+     pm2 save
+     ```
+5. **反向代理示例（Nginx）**
+   ```nginx
+   server {
+       listen 80;
+       server_name register.example.com;
+
+       location / {
+           proxy_pass http://127.0.0.1:3070;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
    ```
-2. 安装依赖：
-   ```powershell
-   npm install
-   ```
-3. 初始化环境变量：
-   ```powershell
-   copy .env.example .env
-   ```
-   按需填写 SillyTavern 配置（见下）。
-4. 启动服务：
-   ```powershell
-   npm run start
-   ```
-   开发调试可使用热重载：
-   ```powershell
-   npm run dev
-   ```
-5. 浏览器访问：<http://localhost:3070/>（如 `.env` 修改了 `PORT`，请替换端口）。
+   配合 certbot/caddy 等即可获得 HTTPS 证书。完成后访问 `https://register.example.com/` 即可。
 
 `.env` 配置说明
 ----
