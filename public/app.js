@@ -159,6 +159,8 @@ document.addEventListener('DOMContentLoaded', () => {
             cancelButton.setAttribute('aria-busy', 'true');
             setStatus('正在取消当前授权，请稍候…');
 
+            console.log('[DEBUG] Cancelling authorization for ticket:', ticketValue);
+
             const controller = typeof AbortController === 'function' ? new AbortController() : null;
             const timeout = controller ? setTimeout(() => controller.abort(), 4000) : null;
 
@@ -179,18 +181,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     const response = await fetch(`/oauth/authorization/${encodeURIComponent(ticketValue)}/cancel`, fetchOptions);
+                    
+                    console.log('[DEBUG] Cancel request response status:', response.status);
+                    const responseBody = await response.text();
+                    console.log('[DEBUG] Cancel request response body:', responseBody);
+
                     if (!response.ok) {
                         console.warn('取消授权请求返回非成功状态：', response.status);
+                        setStatus(`取消授权失败: ${response.status}。详情请查看控制台。`, true);
+                    } else {
+                        setStatus('授权已取消。页面将不会自动跳转（调试模式）。', false);
                     }
+                } else {
+                    console.warn('[DEBUG] No ticket value found for cancellation.');
+                    setStatus('无法取消授权：缺少票据。', true);
                 }
             } catch (error) {
                 console.error('取消授权失败：', error);
+                setStatus(`取消授权时发生脚本错误: ${error.message}。`, true);
             } finally {
                 if (timeout) {
                     clearTimeout(timeout);
                 }
                 cancelButton.removeAttribute('aria-busy');
-                window.location.replace('/?status=cancelled');
+                // window.location.replace('/?status=cancelled'); // DEBUG: Temporarily disabled
+                console.log('[DEBUG] Cancellation flow finished. Redirect is disabled.');
+                
+                // Restore button state for re-testing
+                cancelButton.disabled = false;
+                cancelButton.classList.remove('is-pending');
+                cancelButton.textContent = '取消当前授权';
             }
         });
     }
