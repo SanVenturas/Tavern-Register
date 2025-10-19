@@ -32,12 +32,16 @@ app.get('/health', (_req, res) => {
     });
 });
 
+function sendRegisterPage(res) {
+    res.sendFile(registerHtmlPath);
+}
+
 app.get('/', (_req, res) => {
-    res.redirect('/register');
+    sendRegisterPage(res);
 });
 
 app.get('/register', (_req, res) => {
-    res.sendFile(registerHtmlPath);
+    sendRegisterPage(res);
 });
 
 app.post('/register', async (req, res) => {
@@ -66,6 +70,12 @@ app.post('/register', async (req, res) => {
 });
 
 app.use((req, res) => {
+    const accept = req.headers.accept ?? '';
+    if (accept.includes('text/html')) {
+        sendRegisterPage(res);
+        return;
+    }
+
     res.status(404).json({
         success: false,
         message: '接口不存在',
