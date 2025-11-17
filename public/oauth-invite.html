@@ -272,6 +272,110 @@
             statusElement.classList.toggle('status-success', !isError);
         }
 
+        // 显示醒目的成功弹窗
+        function showSuccessModal(username, loginUrl) {
+            // 隐藏原页面内容
+            document.body.innerHTML = '';
+            
+            // 创建遮罩层
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.7);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                animation: fadeIn 0.3s ease-in-out;
+            `;
+            
+            // 创建弹窗
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 16px;
+                padding: 2.5rem;
+                max-width: 500px;
+                width: 90%;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+                text-align: center;
+                color: white;
+                animation: slideUp 0.4s ease-out;
+            `;
+            
+            modal.innerHTML = `
+                <div style="font-size: 4rem; margin-bottom: 1rem; animation: bounce 0.6s ease-in-out;">✅</div>
+                <h2 style="font-size: 1.75rem; font-weight: 700; margin: 0 0 1rem 0; color: white;">注册成功！</h2>
+                
+                <div style="background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px); border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;">
+                    <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 0.5rem;">您的用户名：</div>
+                    <div style="font-size: 2rem; font-weight: 700; font-family: 'Courier New', monospace; letter-spacing: 0.05em; color: #ffd700; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); word-break: break-all;">${username}</div>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, rgba(255, 59, 48, 0.95) 0%, rgba(255, 149, 0, 0.95) 100%); border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3); animation: pulse 2s ease-in-out infinite;">
+                    <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">⚠️</div>
+                    <div style="font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; color: white; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);">🔐 重要安全提示</div>
+                    <div style="background: rgba(255, 255, 255, 0.25); border: 2px dashed rgba(255, 255, 255, 0.6); border-radius: 10px; padding: 1.25rem; margin: 1rem 0;">
+                        <div style="font-size: 0.95rem; color: white; margin-bottom: 0.5rem; font-weight: 600;">您的默认密码为：</div>
+                        <div style="font-size: 2.5rem; font-weight: 900; font-family: 'Courier New', monospace; color: #FFEB3B; text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 235, 59, 0.5); letter-spacing: 0.15em; margin: 0.5rem 0;">123456</div>
+                    </div>
+                    <div style="font-size: 1.05rem; font-weight: 700; color: white; margin-top: 1rem; line-height: 1.6; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);">
+                        ⚡ 登录后第一件事：<br>请立即前往设置修改密码！
+                    </div>
+                </div>
+                
+                <div style="font-size: 0.9rem; opacity: 0.9; margin-top: 1.5rem; line-height: 1.6;">
+                    请牢记您的用户名，页面将在 10 秒后自动跳转到登录页面...
+                </div>
+            `;
+            
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            
+            // 添加CSS动画
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes slideUp {
+                    from {
+                        transform: translateY(30px);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateY(0);
+                        opacity: 1;
+                    }
+                }
+                @keyframes bounce {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.1); }
+                }
+                @keyframes pulse {
+                    0%, 100% { 
+                        transform: scale(1);
+                        box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
+                    }
+                    50% { 
+                        transform: scale(1.02);
+                        box-shadow: 0 12px 32px rgba(255, 59, 48, 0.5);
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // 10秒后跳转
+            setTimeout(() => {
+                window.location.href = loginUrl;
+            }, 10000);
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.getElementById('invite-form');
             const inviteInput = document.getElementById('invite-input');
@@ -343,12 +447,8 @@
                         return;
                     }
 
-                    setStatus('注册成功！正在跳转...', false);
-                    
-                    // 显示成功信息并跳转
-                    setTimeout(() => {
-                        window.location.href = data.loginUrl || '/login';
-                    }, 1500);
+                    // 显示醒目的成功弹窗
+                    showSuccessModal(data.handle, data.loginUrl || '/login');
                 } catch (error) {
                     setStatus('网络错误，请重试', true);
                     submitBtn.disabled = false;

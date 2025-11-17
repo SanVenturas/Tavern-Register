@@ -392,7 +392,7 @@ app.get('/oauth/callback/:provider', async (req, res) => {
         delete req.session.oauthProvider;
         delete req.session.oauthBaseUrl;
 
-        // 返回成功页面
+        // 返回醒目的成功页面（使用弹窗样式）
         res.send(`
             <!DOCTYPE html>
             <html lang="zh-CN">
@@ -401,66 +401,181 @@ app.get('/oauth/callback/:provider', async (req, res) => {
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <title>注册成功</title>
                 <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
                     body {
-                        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                         display: flex;
                         align-items: center;
                         justify-content: center;
                         min-height: 100vh;
-                        margin: 0;
-                        background: radial-gradient(circle at top, rgba(108, 92, 231, 0.2), transparent 60%),
-                            radial-gradient(circle at bottom, rgba(85, 239, 196, 0.15), transparent 55%),
-                            #10121a;
-                        color: #f0f4ff;
+                        background: rgba(0, 0, 0, 0.7);
+                        animation: fadeIn 0.3s ease-in-out;
                     }
-                    .card {
-                        background: rgba(27, 31, 44, 0.8);
-                        backdrop-filter: blur(16px);
+                    @keyframes fadeIn {
+                        from { opacity: 0; }
+                        to { opacity: 1; }
+                    }
+                    @keyframes slideUp {
+                        from {
+                            transform: translateY(30px);
+                            opacity: 0;
+                        }
+                        to {
+                            transform: translateY(0);
+                            opacity: 1;
+                        }
+                    }
+                    @keyframes bounce {
+                        0%, 100% { transform: scale(1); }
+                        50% { transform: scale(1.1); }
+                    }
+                    @keyframes pulse {
+                        0%, 100% { 
+                            transform: scale(1);
+                            box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
+                        }
+                        50% { 
+                            transform: scale(1.02);
+                            box-shadow: 0 12px 32px rgba(255, 59, 48, 0.5);
+                        }
+                    }
+                    .modal {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                         border-radius: 16px;
-                        padding: 32px;
-                        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+                        padding: 2.5rem;
                         max-width: 500px;
+                        width: 90%;
+                        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+                        text-align: center;
+                        color: white;
+                        animation: slideUp 0.4s ease-out;
                     }
-                    h1 { color: #55efc4; }
-                    .warning {
-                        background: rgba(255, 118, 117, 0.2);
-                        border-left: 4px solid #ff7675;
-                        padding: 16px;
-                        margin: 20px 0;
-                        border-radius: 8px;
+                    .icon {
+                        font-size: 4rem;
+                        margin-bottom: 1rem;
+                        animation: bounce 0.6s ease-in-out;
                     }
-                    .info {
-                        background: rgba(85, 239, 196, 0.1);
-                        border-left: 4px solid #55efc4;
-                        padding: 16px;
-                        margin: 20px 0;
-                        border-radius: 8px;
+                    h1 {
+                        font-size: 1.75rem;
+                        font-weight: 700;
+                        margin: 0 0 1rem 0;
+                        color: white;
                     }
-                    a {
-                        color: #55efc4;
-                        text-decoration: none;
+                    .username-box {
+                        background: rgba(255, 255, 255, 0.2);
+                        backdrop-filter: blur(10px);
+                        border: 2px solid rgba(255, 255, 255, 0.3);
+                        border-radius: 12px;
+                        padding: 1.5rem;
+                        margin: 1.5rem 0;
+                    }
+                    .username-label {
+                        font-size: 0.9rem;
+                        opacity: 0.9;
+                        margin-bottom: 0.5rem;
+                    }
+                    .username-value {
+                        font-size: 2rem;
+                        font-weight: 700;
+                        font-family: 'Courier New', monospace;
+                        letter-spacing: 0.05em;
+                        color: #ffd700;
+                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                        word-break: break-all;
+                    }
+                    .password-notice {
+                        background: linear-gradient(135deg, rgba(255, 59, 48, 0.95) 0%, rgba(255, 149, 0, 0.95) 100%);
+                        border: 3px solid rgba(255, 255, 255, 0.8);
+                        border-radius: 12px;
+                        padding: 1.5rem;
+                        margin: 1.5rem 0;
+                        box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
+                        animation: pulse 2s ease-in-out infinite;
+                    }
+                    .warning-icon {
+                        font-size: 2.5rem;
+                        margin-bottom: 0.75rem;
+                    }
+                    .warning-title {
+                        font-size: 1.2rem;
+                        font-weight: 700;
+                        margin-bottom: 1rem;
+                        color: white;
+                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                    }
+                    .password-box {
+                        background: rgba(255, 255, 255, 0.25);
+                        border: 2px dashed rgba(255, 255, 255, 0.6);
+                        border-radius: 10px;
+                        padding: 1.25rem;
+                        margin: 1rem 0;
+                    }
+                    .password-label {
+                        font-size: 0.95rem;
+                        color: white;
+                        margin-bottom: 0.5rem;
                         font-weight: 600;
                     }
-                    a:hover { text-decoration: underline; }
+                    .password-value {
+                        font-size: 2.5rem;
+                        font-weight: 900;
+                        font-family: 'Courier New', monospace;
+                        color: #FFEB3B;
+                        text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 235, 59, 0.5);
+                        letter-spacing: 0.15em;
+                        margin: 0.5rem 0;
+                    }
+                    .urgent-note {
+                        font-size: 1.05rem;
+                        font-weight: 700;
+                        color: white;
+                        margin-top: 1rem;
+                        line-height: 1.6;
+                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                    }
+                    .tip {
+                        font-size: 0.9rem;
+                        opacity: 0.9;
+                        margin-top: 1.5rem;
+                        line-height: 1.6;
+                    }
                 </style>
             </head>
             <body>
-                <div class="card">
+                <div class="modal">
+                    <div class="icon">✅</div>
                     <h1>注册成功！</h1>
-                    <div class="info">
-                        <p><strong>用户名：</strong>${result.handle}</p>
-                        <p><strong>显示名称：</strong>${displayName}</p>
+                    
+                    <div class="username-box">
+                        <div class="username-label">您的用户名：</div>
+                        <div class="username-value">${result.handle}</div>
                     </div>
-                    <div class="warning">
-                        <p><strong>⚠️ 重要提示：</strong></p>
-                        <p>您的默认密码为 <strong>123456</strong></p>
-                        <p>请登录后<strong>第一时间修改密码</strong>以确保账户安全！</p>
+                    
+                    <div class="password-notice">
+                        <div class="warning-icon">⚠️</div>
+                        <div class="warning-title">🔐 重要安全提示</div>
+                        <div class="password-box">
+                            <div class="password-label">您的默认密码为：</div>
+                            <div class="password-value">123456</div>
+                        </div>
+                        <div class="urgent-note">
+                            ⚡ 登录后第一件事：<br>
+                            请立即前往设置修改密码！
+                        </div>
                     </div>
-                    <p><a href="${config.baseUrl}/login" target="_blank">前往登录页面</a></p>
+                    
+                    <div class="tip">
+                        请牢记您的用户名，页面将在 10 秒后自动跳转到登录页面...
+                    </div>
+                    
                     <script>
                         setTimeout(() => {
                             window.location.href = '${config.baseUrl}/login';
-                        }, 5000);
+                        }, 10000);
                     </script>
                 </div>
             </body>
@@ -603,12 +718,195 @@ app.post('/oauth/invite', async (req, res) => {
         // 清除会话中的待注册用户信息
         delete req.session.oauthPendingUser;
         
-        res.json({
-            success: true,
-            handle: result.handle,
-            displayName: displayName,
-            loginUrl: `${config.baseUrl}/login`,
-        });
+        // 返回醒目的成功页面（使用弹窗样式）
+        res.send(`
+            <!DOCTYPE html>
+            <html lang="zh-CN">
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <title>注册成功</title>
+                <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        min-height: 100vh;
+                        background: rgba(0, 0, 0, 0.7);
+                        animation: fadeIn 0.3s ease-in-out;
+                    }
+                    @keyframes fadeIn {
+                        from { opacity: 0; }
+                        to { opacity: 1; }
+                    }
+                    @keyframes slideUp {
+                        from {
+                            transform: translateY(30px);
+                            opacity: 0;
+                        }
+                        to {
+                            transform: translateY(0);
+                            opacity: 1;
+                        }
+                    }
+                    @keyframes bounce {
+                        0%, 100% { transform: scale(1); }
+                        50% { transform: scale(1.1); }
+                    }
+                    @keyframes pulse {
+                        0%, 100% { 
+                            transform: scale(1);
+                            box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
+                        }
+                        50% { 
+                            transform: scale(1.02);
+                            box-shadow: 0 12px 32px rgba(255, 59, 48, 0.5);
+                        }
+                    }
+                    .modal {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        border-radius: 16px;
+                        padding: 2.5rem;
+                        max-width: 500px;
+                        width: 90%;
+                        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+                        text-align: center;
+                        color: white;
+                        animation: slideUp 0.4s ease-out;
+                    }
+                    .icon {
+                        font-size: 4rem;
+                        margin-bottom: 1rem;
+                        animation: bounce 0.6s ease-in-out;
+                    }
+                    h1 {
+                        font-size: 1.75rem;
+                        font-weight: 700;
+                        margin: 0 0 1rem 0;
+                        color: white;
+                    }
+                    .username-box {
+                        background: rgba(255, 255, 255, 0.2);
+                        backdrop-filter: blur(10px);
+                        border: 2px solid rgba(255, 255, 255, 0.3);
+                        border-radius: 12px;
+                        padding: 1.5rem;
+                        margin: 1.5rem 0;
+                    }
+                    .username-label {
+                        font-size: 0.9rem;
+                        opacity: 0.9;
+                        margin-bottom: 0.5rem;
+                    }
+                    .username-value {
+                        font-size: 2rem;
+                        font-weight: 700;
+                        font-family: 'Courier New', monospace;
+                        letter-spacing: 0.05em;
+                        color: #ffd700;
+                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                        word-break: break-all;
+                    }
+                    .password-notice {
+                        background: linear-gradient(135deg, rgba(255, 59, 48, 0.95) 0%, rgba(255, 149, 0, 0.95) 100%);
+                        border: 3px solid rgba(255, 255, 255, 0.8);
+                        border-radius: 12px;
+                        padding: 1.5rem;
+                        margin: 1.5rem 0;
+                        box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
+                        animation: pulse 2s ease-in-out infinite;
+                    }
+                    .warning-icon {
+                        font-size: 2.5rem;
+                        margin-bottom: 0.75rem;
+                    }
+                    .warning-title {
+                        font-size: 1.2rem;
+                        font-weight: 700;
+                        margin-bottom: 1rem;
+                        color: white;
+                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                    }
+                    .password-box {
+                        background: rgba(255, 255, 255, 0.25);
+                        border: 2px dashed rgba(255, 255, 255, 0.6);
+                        border-radius: 10px;
+                        padding: 1.25rem;
+                        margin: 1rem 0;
+                    }
+                    .password-label {
+                        font-size: 0.95rem;
+                        color: white;
+                        margin-bottom: 0.5rem;
+                        font-weight: 600;
+                    }
+                    .password-value {
+                        font-size: 2.5rem;
+                        font-weight: 900;
+                        font-family: 'Courier New', monospace;
+                        color: #FFEB3B;
+                        text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 235, 59, 0.5);
+                        letter-spacing: 0.15em;
+                        margin: 0.5rem 0;
+                    }
+                    .urgent-note {
+                        font-size: 1.05rem;
+                        font-weight: 700;
+                        color: white;
+                        margin-top: 1rem;
+                        line-height: 1.6;
+                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                    }
+                    .tip {
+                        font-size: 0.9rem;
+                        opacity: 0.9;
+                        margin-top: 1.5rem;
+                        line-height: 1.6;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="modal">
+                    <div class="icon">✅</div>
+                    <h1>注册成功！</h1>
+                    
+                    <div class="username-box">
+                        <div class="username-label">您的用户名：</div>
+                        <div class="username-value">${result.handle}</div>
+                    </div>
+                    
+                    <div class="password-notice">
+                        <div class="warning-icon">⚠️</div>
+                        <div class="warning-title">🔐 重要安全提示</div>
+                        <div class="password-box">
+                            <div class="password-label">您的默认密码为：</div>
+                            <div class="password-value">123456</div>
+                        </div>
+                        <div class="urgent-note">
+                            ⚡ 登录后第一件事：<br>
+                            请立即前往设置修改密码！
+                        </div>
+                    </div>
+                    
+                    <div class="tip">
+                        请牢记您的用户名，页面将在 10 秒后自动跳转到登录页面...
+                    </div>
+                    
+                    <script>
+                        setTimeout(() => {
+                            window.location.href = '${config.baseUrl}/login';
+                        }, 10000);
+                    </script>
+                </div>
+            </body>
+            </html>
+        `);
     } catch (error) {
         console.error(`OAuth 用户创建失败:`, error);
         res.status(500).json({
