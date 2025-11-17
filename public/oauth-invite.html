@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>输入邀请码 - TavernRegister</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --accent-color: #667eea;
+            --text-color: #2d3748;
+            --success-color: #48bb78;
+            --error-color: #f56565;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .invite-wrapper {
+            width: 100%;
+            max-width: 480px;
+            animation: fadeIn 0.4s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .invite-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        }
+        
+        .invite-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .invite-header h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .invite-header p {
+            color: #718096;
+            font-size: 0.9375rem;
+            line-height: 1.6;
+        }
+        
+        .info-box {
+            background: #edf2f7;
+            border-left: 4px solid var(--accent-color);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .info-box p {
+            color: #4a5568;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .info-box p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .info-box strong {
+            color: var(--accent-color);
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-input {
+            width: 100%;
+            height: 50px;
+            padding: 0 1rem;
+            font-size: 1.125rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            background: white;
+            color: var(--text-color);
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+        
+        .form-input:hover {
+            border-color: #cbd5e0;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-input::placeholder {
+            color: #a0aec0;
+            letter-spacing: normal;
+            text-transform: none;
+        }
+        
+        .btn-submit {
+            width: 100%;
+            height: 50px;
+            background: var(--primary-gradient);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 0.5rem;
+        }
+        
+        .btn-submit:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.35);
+        }
+        
+        .btn-submit:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .status-message {
+            margin-top: 1rem;
+            padding: 0.875rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-align: center;
+        }
+        
+        .status-message:empty {
+            display: none;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .footer-link {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .footer-link a {
+            color: #718096;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.2s ease;
+        }
+        
+        .footer-link a:hover {
+            color: var(--accent-color);
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 480px) {
+            .invite-card {
+                padding: 2rem 1.5rem;
+            }
+            
+            .invite-header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .form-input,
+            .btn-submit {
+                height: 48px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="invite-wrapper">
+        <div class="invite-card">
+            <div class="invite-header">
+                <h1>输入邀请码</h1>
+                <p>登录成功！请输入邀请码完成注册</p>
+            </div>
+
+            <div class="info-box">
+                <p><strong>提示信息：</strong></p>
+                <p>• 需要有效的邀请码才能完成注册</p>
+                <p>• 邀请码不区分大小写</p>
+            </div>
+
+            <form id="invite-form" novalidate>
+                <div class="form-group">
+                    <label class="form-label">邀请码</label>
+                    <input 
+                        type="text" 
+                        name="inviteCode" 
+                        class="form-input"
+                        required 
+                        autocomplete="off"
+                        placeholder="请输入邀请码" 
+                        maxlength="32"
+                        id="invite-input">
+                </div>
+
+                <button type="submit" class="btn-submit" id="submit-btn">完成注册</button>
+            </form>
+
+            <div id="status" class="status-message" role="status" aria-live="polite"></div>
+            
+            <div class="footer-link">
+                <a href="/">← 返回注册页面</a>
+            </div>
+        </div>
+    </div>
+    <script>
+        function setStatus(message = '', isError = false) {
+            const statusElement = document.getElementById('status');
+            if (!statusElement) return;
+            statusElement.textContent = message;
+            statusElement.classList.toggle('status-error', isError);
+            statusElement.classList.toggle('status-success', !isError);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('invite-form');
+            const inviteInput = document.getElementById('invite-input');
+            const submitBtn = document.getElementById('submit-btn');
+            
+            if (!form) return;
+
+            // 自动聚焦
+            if (inviteInput) {
+                setTimeout(() => inviteInput.focus(), 100);
+            }
+
+            // 自动转换为大写
+            if (inviteInput) {
+                inviteInput.addEventListener('input', (e) => {
+                    e.target.value = e.target.value.toUpperCase();
+                });
+            }
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                setStatus('');
+
+                const formData = new FormData(form);
+                const inviteCode = formData.get('inviteCode');
+
+                if (!inviteCode || !inviteCode.trim()) {
+                    setStatus('请输入邀请码', true);
+                    return;
+                }
+
+                // 设置加载状态
+                submitBtn.disabled = true;
+                submitBtn.textContent = '验证中...';
+                if (inviteInput) inviteInput.disabled = true;
+
+                try {
+                    const response = await fetch('/oauth/invite', {
+                        method: 'POST',
+                        headers: {
+                            'content-type': 'application/json',
+                            accept: 'application/json',
+                        },
+                        body: JSON.stringify({ inviteCode: inviteCode.trim().toUpperCase() }),
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.success) {
+                        setStatus(data.message || '邀请码验证失败', true);
+                        
+                        // 恢复状态
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = '完成注册';
+                        if (inviteInput) {
+                            inviteInput.disabled = false;
+                            inviteInput.value = '';
+                            inviteInput.focus();
+                        }
+                        return;
+                    }
+
+                    setStatus('注册成功！正在跳转...', false);
+                    
+                    // 显示成功信息并跳转
+                    setTimeout(() => {
+                        window.location.href = data.loginUrl || '/login';
+                    }, 1500);
+                } catch (error) {
+                    setStatus('网络错误，请重试', true);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '完成注册';
+                    if (inviteInput) {
+                        inviteInput.disabled = false;
+                        inviteInput.focus();
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+

@@ -11,7 +11,15 @@
     <main class="layout">
         <section class="card">
             <h1>创建 SillyTavern 账号</h1>
-            <p class="subtitle">请填写以下信息完成注册，所有字段均为必填。</p>
+            <p class="subtitle">请填写以下信息完成注册，或使用第三方账号一键注册。</p>
+
+            <div id="oauth-providers" class="oauth-section" style="display: none;">
+                <p class="oauth-title">一键注册</p>
+                <div class="oauth-buttons" id="oauth-buttons"></div>
+                <div class="divider">
+                    <span>或</span>
+                </div>
+            </div>
 
             <form id="register-form" novalidate>
 
@@ -29,13 +37,20 @@
 
                 <label class="field">
                     <span>登录密码</span>
-                    <input type="password" name="password" maxlength="128" autocomplete="new-password" placeholder="请输入密码" required>
-                    <small class="hint">请设置长度合适的密码，妥善保管。</small>
+                    <input type="password" name="password" maxlength="128" autocomplete="new-password" placeholder="请输入密码（留空则使用默认密码 123456）">
+                    <small class="hint">留空将使用默认密码 123456，登录后请第一时间修改密码。</small>
                 </label>
 
                 <label class="field">
                     <span>确认密码</span>
-                    <input type="password" name="confirm" maxlength="128" autocomplete="new-password" placeholder="再次输入密码" required>
+                    <input type="password" name="confirm" maxlength="128" autocomplete="new-password" placeholder="再次输入密码（使用默认密码可留空）">
+                    <small class="hint">如果使用默认密码，此字段可留空。</small>
+                </label>
+
+                <label class="field" id="invite-code-field" style="display: none;">
+                    <span>邀请码 <span style="color: var(--error);">*</span></span>
+                    <input type="text" name="inviteCode" maxlength="32" autocomplete="off" placeholder="请输入邀请码" style="text-transform: uppercase;">
+                    <small class="hint">注册需要有效的邀请码。</small>
                 </label>
 
                 <button type="submit" class="primary">立即注册</button>
