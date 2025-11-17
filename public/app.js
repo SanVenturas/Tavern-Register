@@ -359,14 +359,80 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isDefaultPassword) {
             passwordNotice = document.createElement('div');
             passwordNotice.style.cssText = `
-                background: rgba(255, 193, 7, 0.2);
-                border: 1px solid rgba(255, 193, 7, 0.5);
-                border-radius: 8px;
-                padding: 1rem;
-                margin: 1rem 0;
-                font-size: 0.95rem;
+                background: linear-gradient(135deg, rgba(255, 59, 48, 0.95) 0%, rgba(255, 149, 0, 0.95) 100%);
+                border: 3px solid rgba(255, 255, 255, 0.8);
+                border-radius: 12px;
+                padding: 1.5rem;
+                margin: 1.5rem 0;
+                box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
+                animation: pulse 2s ease-in-out infinite;
             `;
-            passwordNotice.innerHTML = '<strong>⚠️ 重要提示：</strong><br>默认密码为 <strong style="font-family: monospace; color: #ffd700;">123456</strong><br>请登录后第一时间修改密码！';
+            
+            const warningIcon = document.createElement('div');
+            warningIcon.style.cssText = `
+                font-size: 2.5rem;
+                margin-bottom: 0.75rem;
+            `;
+            warningIcon.textContent = '⚠️';
+            
+            const warningTitle = document.createElement('div');
+            warningTitle.style.cssText = `
+                font-size: 1.2rem;
+                font-weight: 700;
+                margin-bottom: 1rem;
+                color: white;
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            `;
+            warningTitle.textContent = '🔐 重要安全提示';
+            
+            const passwordBox = document.createElement('div');
+            passwordBox.style.cssText = `
+                background: rgba(255, 255, 255, 0.25);
+                border: 2px dashed rgba(255, 255, 255, 0.6);
+                border-radius: 10px;
+                padding: 1.25rem;
+                margin: 1rem 0;
+            `;
+            
+            const passwordLabel = document.createElement('div');
+            passwordLabel.style.cssText = `
+                font-size: 0.95rem;
+                color: white;
+                margin-bottom: 0.5rem;
+                font-weight: 600;
+            `;
+            passwordLabel.textContent = '您的默认密码为：';
+            
+            const passwordValue = document.createElement('div');
+            passwordValue.style.cssText = `
+                font-size: 2.5rem;
+                font-weight: 900;
+                font-family: 'Courier New', monospace;
+                color: #FFEB3B;
+                text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 235, 59, 0.5);
+                letter-spacing: 0.15em;
+                margin: 0.5rem 0;
+            `;
+            passwordValue.textContent = '123456';
+            
+            passwordBox.appendChild(passwordLabel);
+            passwordBox.appendChild(passwordValue);
+            
+            const urgentNote = document.createElement('div');
+            urgentNote.style.cssText = `
+                font-size: 1.05rem;
+                font-weight: 700;
+                color: white;
+                margin-top: 1rem;
+                line-height: 1.6;
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            `;
+            urgentNote.innerHTML = '⚡ 登录后第一件事：<br>请立即前往设置修改密码！';
+            
+            passwordNotice.appendChild(warningIcon);
+            passwordNotice.appendChild(warningTitle);
+            passwordNotice.appendChild(passwordBox);
+            passwordNotice.appendChild(urgentNote);
         }
         
         // 提示文字
@@ -414,6 +480,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 @keyframes bounce {
                     0%, 100% { transform: scale(1); }
                     50% { transform: scale(1.1); }
+                }
+                @keyframes pulse {
+                    0%, 100% { 
+                        transform: scale(1);
+                        box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
+                    }
+                    50% { 
+                        transform: scale(1.02);
+                        box-shadow: 0 12px 32px rgba(255, 59, 48, 0.5);
+                    }
                 }
             `;
             document.head.appendChild(style);
