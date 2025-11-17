@@ -80,6 +80,24 @@ app.post('/register', async (req, res) => {
     try {
         const { handle, name, password, inviteCode } = sanitizeInput(req.body ?? {});
         
+        // 标准化用户名
+        const normalizedHandle = client.normalizeHandle(handle);
+        
+        // 本地重复检查 - 提供更友好的提示
+        const existingUser = DataStore.getUserByHandle(normalizedHandle);
+        if (existingUser) {
+            const methodText = existingUser.registrationMethod === 'manual' 
+                ? '手动注册' 
+                : existingUser.registrationMethod.startsWith('oauth:')
+                    ? `${existingUser.registrationMethod.replace('oauth:', '').toUpperCase()} 一键注册`
+                    : '其他方式';
+            
+            return res.status(409).json({
+                success: false,
+                message: `该用户名已被注册（注册方式：${methodText}，注册时间：${new Date(existingUser.registeredAt).toLocaleString('zh-CN')}）`,
+            });
+        }
+        
         // 如果启用了邀请码，验证邀请码
         if (config.requireInviteCode) {
             if (!inviteCode || typeof inviteCode !== 'string' || !inviteCode.trim()) {
@@ -247,7 +265,106 @@ app.get('/oauth/callback/:provider', async (req, res) => {
             return res.redirect('/oauth/invite');
         }
         
-        // 如果不需要邀请码，直接创建用户
+        // 如果不需要邀请码，检查是否已注册
+        const existingUser = DataStore.getUserByHandle(handle);
+        if (existingUser) {
+            // 用户已注册，显示友好提示
+            const methodText = existingUser.registrationMethod === 'manual' 
+                ? '手动注册' 
+                : existingUser.registrationMethod.startsWith('oauth:')
+                    ? `${existingUser.registrationMethod.replace('oauth:', '').toUpperCase()} 一键注册`
+                    : '其他方式';
+            
+            const registeredDate = new Date(existingUser.registeredAt).toLocaleString('zh-CN');
+            
+            return res.send(`
+                <!DOCTYPE html>
+                <html lang="zh-CN">
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <title>已注册</title>
+                    <style>
+                        body {
+                            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            min-height: 100vh;
+                            margin: 0;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: #f0f4ff;
+                        }
+                        .card {
+                            background: rgba(255, 255, 255, 0.95);
+                            color: #2d3748;
+                            padding: 2.5rem;
+                            border-radius: 16px;
+                            max-width: 500px;
+                            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                        }
+                        h1 { 
+                            color: #667eea; 
+                            margin-bottom: 1rem;
+                        }
+                        .info-box {
+                            background: #edf2f7;
+                            border-left: 4px solid #667eea;
+                            padding: 1rem;
+                            margin: 1.5rem 0;
+                            border-radius: 8px;
+                        }
+                        .info-box p {
+                            margin: 0.5rem 0;
+                        }
+                        .info-box strong {
+                            color: #667eea;
+                        }
+                        .btn {
+                            display: inline-block;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            padding: 0.75rem 1.5rem;
+                            border-radius: 8px;
+                            text-decoration: none;
+                            font-weight: 600;
+                            margin-top: 1rem;
+                            transition: transform 0.2s;
+                        }
+                        .btn:hover {
+                            transform: translateY(-2px);
+                        }
+                        .secondary {
+                            color: #667eea;
+                            text-decoration: none;
+                            margin-left: 1rem;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <h1>✓ 您已经注册过了</h1>
+                        <div class="info-box">
+                            <p><strong>用户名：</strong>${handle}</p>
+                            <p><strong>显示名称：</strong>${displayName}</p>
+                            <p><strong>注册方式：</strong>${methodText}</p>
+                            <p><strong>注册时间：</strong>${registeredDate}</p>
+                        </div>
+                        <p>您可以直接使用此账号登录 SillyTavern。</p>
+                        <a href="${config.baseUrl}/login" class="btn">前往登录</a>
+                        <a href="/" class="secondary">返回首页</a>
+                        <script>
+                            setTimeout(() => {
+                                window.location.href = '${config.baseUrl}/login';
+                            }, 8000);
+                        </script>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
+        
+        // 创建新用户
         const defaultPassword = oauthService.getDefaultPassword();
         const result = await client.registerUser({
             handle: handle,
@@ -439,6 +556,23 @@ app.post('/oauth/invite', async (req, res) => {
     
     try {
         const { handle, displayName, provider } = req.session.oauthPendingUser;
+        
+        // 检查是否已注册
+        const existingUser = DataStore.getUserByHandle(handle);
+        if (existingUser) {
+            const methodText = existingUser.registrationMethod === 'manual' 
+                ? '手动注册' 
+                : existingUser.registrationMethod.startsWith('oauth:')
+                    ? `${existingUser.registrationMethod.replace('oauth:', '').toUpperCase()} 一键注册`
+                    : '其他方式';
+            
+            return res.status(409).json({
+                success: false,
+                message: `该用户名已被注册（注册方式：${methodText}，注册时间：${new Date(existingUser.registeredAt).toLocaleString('zh-CN')}）`,
+                isAlreadyRegistered: true,
+                loginUrl: `${config.baseUrl}/login`,
+            });
+        }
         
         // 使用默认密码注册
         const defaultPassword = oauthService.getDefaultPassword();

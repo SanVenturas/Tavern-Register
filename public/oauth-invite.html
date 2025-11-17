@@ -321,6 +321,15 @@
                     const data = await response.json();
 
                     if (!response.ok || !data.success) {
+                        // 检查是否是"已注册"的情况
+                        if (data.isAlreadyRegistered && data.loginUrl) {
+                            setStatus('您已经注册过了，正在跳转到登录页面...', false);
+                            setTimeout(() => {
+                                window.location.href = data.loginUrl;
+                            }, 2000);
+                            return;
+                        }
+                        
                         setStatus(data.message || '邀请码验证失败', true);
                         
                         // 恢复状态
