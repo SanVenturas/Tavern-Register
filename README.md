@@ -17,6 +17,13 @@ TavernRegister 是一个极简的独立注册门户，可在不修改 SillyTaver
 快速开始（使用仓库内启动脚本）
 ----
 本项目包含平台对应的启动脚本，优先使用仓库自带脚本来安装依赖并启动服务，脚本已包含常见检查并能简化部署流程。
+### 命令行安装
+```bash
+git clone https://github.com/your-username/TavernRegister.git
+cd TavernRegister
+npm install
+npm start
+```
 
 ### Windows 环境
 
