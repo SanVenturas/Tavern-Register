@@ -109,6 +109,14 @@ app.post('/api/login', (req, res) => {
         return res.status(401).json({ success: false, message: '用户不存在或密码错误' });
     }
 
+    // 禁止第三方登录用户使用账号密码方式登录
+    if (user.registrationMethod && String(user.registrationMethod).startsWith('oauth:')) {
+        return res.status(403).json({
+            success: false,
+            message: '该账户为第三方登录账户，请通过相应的第三方登录入口登录',
+        });
+    }
+
     // 简单比对密码
     if (user.password !== password) {
             return res.status(401).json({ success: false, message: '用户不存在或密码错误' });
@@ -428,8 +436,22 @@ app.get('/oauth/callback/:provider', async (req, res) => {
         const tempClient = new SillyTavernClient({});
         const handle = tempClient.normalizeHandle(userInfo.username || userInfo.id);
         const displayName = userInfo.displayName || userInfo.username || `用户_${userInfo.id.slice(0, 8)}`;
+
+        // 无论当前是否需要邀请码，都先检查本地是否已存在该用户
+        const existingUser = DataStore.getUserByHandle(handle);
+        if (existingUser) {
+            // 已注册用户：直接登录（走本地 session），不再重复注册或再次填写邀请码
+            req.session.userHandle = existingUser.handle;
+
+            // 清除 OAuth 相关临时状态
+            delete req.session.oauthState;
+            delete req.session.oauthProvider;
+            delete req.session.oauthBaseUrl;
+
+            return res.redirect('/select-server');
+        }
         
-        // 如果启用了邀请码，跳转到邀请码验证页面
+        // 如果启用了邀请码，跳转到邀请码验证页面（首次注册才会到这里）
         if (config.requireInviteCode) {
             // 将用户信息存入 session
             req.session.oauthPendingUser = {
@@ -445,14 +467,6 @@ app.get('/oauth/callback/:provider', async (req, res) => {
             
             // 跳转到邀请码验证页面
             return res.redirect('/oauth/invite');
-        }
-        
-        // 如果不需要邀请码，检查是否已注册
-        const existingUser = DataStore.getUserByHandle(handle);
-        if (existingUser) {
-            // 用户已注册，直接登录
-            req.session.userHandle = existingUser.handle;
-            return res.redirect('/select-server');
         }
         
         // 创建新用户 (本地)
@@ -539,8 +553,18 @@ app.post('/oauth/invite', async (req, res) => {
         // 检查是否已注册
         const existingUser = DataStore.getUserByHandle(handle);
         if (existingUser) {
-             // ... (Similar duplication check logic)
-             return res.status(409).json({ success: false, message: '用户已存在' });
+            // 如果用户已经存在，说明之前已经完成过 OAuth 注册和邀请码验证。
+            // 此时视为「登录」，直接建立会话并告知前端可以跳转到登录/选服页面。
+            delete req.session.oauthPendingUser;
+            req.session.userHandle = existingUser.handle;
+
+            return res.json({
+                success: false,
+                isAlreadyRegistered: true,
+                handle: existingUser.handle,
+                loginUrl: '/select-server',
+                message: '该账号已完成注册，正在为您直接登录',
+            });
         }
         
         // 创建新用户 (本地)
