@@ -46,14 +46,25 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // 会话配置（用于存储 OAuth state 和 pending 用户）
+const sessionSecret = process.env.SESSION_SECRET || 'tavern-register-secret-change-in-production';
+
+// 安全检查：生产环境必须设置自定义 SESSION_SECRET
+if (process.env.NODE_ENV === 'production' && sessionSecret === 'tavern-register-secret-change-in-production') {
+    console.error('⚠️  安全警告：生产环境必须设置 SESSION_SECRET 环境变量！');
+    console.error('⚠️  当前使用默认密钥，存在安全风险！');
+    // 可以选择抛出错误强制退出，或仅警告
+    // throw new Error('生产环境必须设置 SESSION_SECRET');
+}
+
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'tavern-register-secret-change-in-production',
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.NODE_ENV === 'production' || process.env.FORCE_HTTPS === 'true',
         httpOnly: true,
         maxAge: 30 * 60 * 1000, // 30 分钟
+        sameSite: 'lax', // 增加CSRF保护
     },
 }));
 const publicDir = path.join(__dirname, '../public');
@@ -253,7 +264,7 @@ app.get('/api/servers/available', (req, res) => {
     }
 });
 
-// 获取当前用户状态
+    // 获取当前用户状态
 app.get('/api/user/status', (req, res) => {
     const handle = req.session.userHandle || req.session.pendingUserHandle;
     if (!handle) {
@@ -268,14 +279,17 @@ app.get('/api/user/status', (req, res) => {
     const normalizedServerId = user.serverId != null ? Number(user.serverId) : null;
     const server = normalizedServerId != null ? DataStore.getServerById(normalizedServerId) : null;
     
+    // 排除敏感信息：密码
+    const { password, ...safeUser } = user;
+    
     res.json({
         success: true,
         loggedIn: true,
-        handle: user.handle,
+        handle: safeUser.handle,
         serverId: normalizedServerId,
         serverUrl: server ? server.url : null,
         serverName: server ? server.name : null,
-        registrationStatus: user.registrationStatus
+        registrationStatus: safeUser.registrationStatus
     });
 });
 
@@ -734,8 +748,10 @@ app.get('/api/admin/users', requireAdminAuth(config), (req, res) => {
         const servers = DataStore.getServers();
         const users = allUsers.slice(startIndex, endIndex).map(u => {
             const server = servers.find(s => s.id === u.serverId);
+            // 排除敏感信息：密码
+            const { password, ...safeUser } = u;
             return {
-                ...u,
+                ...safeUser,
                 serverName: server ? server.name : (u.serverId ? '未知服务器' : '未选择')
             };
         });
@@ -770,8 +786,10 @@ app.get('/api/admin/servers', requireAdminAuth(config), (req, res) => {
                 if (u.serverId == null) return false;
                 return Number(u.serverId) === serverNumericId;
             }).length;
+            // 排除敏感信息：管理员用户名和密码
+            const { admin_username, admin_password, ...safeServer } = s;
             return {
-                ...s,
+                ...safeServer,
                 id: serverNumericId,
                 registeredUserCount,
             };
@@ -1026,6 +1044,12 @@ app.get('/api/admin/stats', requireAdminAuth(config), (_req, res) => {
         const codes = DataStore.getInviteCodes();
         const servers = DataStore.getServers();
         
+        // 排除敏感信息：用户密码
+        const safeRecentUsers = users.slice(-10).reverse().map(u => {
+            const { password, ...safeUser } = u;
+            return safeUser;
+        });
+        
         const stats = {
             totalUsers: users.length,
             totalInviteCodes: codes.length,
@@ -1033,7 +1057,7 @@ app.get('/api/admin/stats', requireAdminAuth(config), (_req, res) => {
             usedInviteCodes: codes.filter(c => c.usedCount > 0).length,
             totalServers: servers.length,
             activeServers: servers.filter(s => s.isActive).length,
-            recentUsers: users.slice(-10).reverse(),
+            recentUsers: safeRecentUsers,
         };
         
         res.json({ success: true, stats });
