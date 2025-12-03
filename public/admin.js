@@ -62,6 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadUsers();
             } else if (targetTab === 'invites') {
                 loadInviteCodes();
+            } else if (targetTab === 'servers') {
+                loadServers();
             }
         });
     });
@@ -195,11 +197,230 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // 添加服务器表单
+    const addServerForm = document.getElementById('add-server-form');
+    const testConnectionBtn = document.getElementById('test-connection-btn');
+
+    if (addServerForm) {
+        addServerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            setStatus('');
+
+            const formData = new FormData(addServerForm);
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await fetch('/api/admin/servers', {
+                    method: 'POST',
+                    headers: {
+                        'content-type': 'application/json',
+                        accept: 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    setStatus(result.message || '添加失败', true);
+                    return;
+                }
+
+                setStatus('服务器添加成功', false);
+                addServerForm.reset();
+                loadServers();
+                loadStats();
+            } catch (error) {
+                setStatus('添加失败，请稍后再试', true);
+            }
+        });
+    }
+
+    if (testConnectionBtn && addServerForm) {
+        testConnectionBtn.addEventListener('click', async () => {
+            const formData = new FormData(addServerForm);
+            const data = Object.fromEntries(formData.entries());
+            
+            if (!data.url || !data.admin_username || !data.admin_password) {
+                setStatus('请填写完整的连接信息', true);
+                return;
+            }
+
+            setStatus('正在测试连接...', false);
+            try {
+                const response = await fetch('/api/admin/servers/test', {
+                    method: 'POST',
+                    headers: {
+                        'content-type': 'application/json',
+                        accept: 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    setStatus('连接测试成功！', false);
+                } else {
+                    setStatus(`连接失败: ${result.message}`, true);
+                }
+            } catch (error) {
+                setStatus(`连接测试出错: ${error.message}`, true);
+            }
+        });
+    }
+
     // 加载数据
     loadStats();
     loadUsers();
     loadInviteCodes();
+
+    // Initialization for edit features
+    const editServerForm = document.getElementById('edit-server-form');
+    if (editServerForm) {
+        editServerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            setStatus('');
+
+            const formData = new FormData(editServerForm);
+            const data = Object.fromEntries(formData.entries());
+            const id = data.id;
+
+            // 如果密码为空，则从提交数据中移除，避免被置空
+            if (!data.admin_password) {
+                delete data.admin_password;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/servers/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'content-type': 'application/json',
+                        accept: 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    setStatus(result.message || '更新失败', true);
+                    return;
+                }
+
+                setStatus('服务器更新成功', false);
+                closeEditModal();
+                loadServers();
+            } catch (error) {
+                setStatus('更新失败，请稍后再试', true);
+            }
+        });
+    }
+
+    // 点击模态框外部关闭
+    const editServerModal = document.getElementById('edit-server-modal');
+    if (editServerModal) {
+        editServerModal.addEventListener('click', (e) => {
+            if (e.target === editServerModal) {
+                closeEditModal();
+            }
+        });
+    }
 });
+
+async function loadServers() {
+    try {
+        const response = await fetch('/api/admin/servers', {
+            headers: { accept: 'application/json' },
+        });
+
+        if (!response.ok) return;
+
+        const result = await response.json();
+        if (!result.success) return;
+
+        // 保存服务器列表到全局变量，供编辑功能使用
+        window.currentServers = result.servers;
+
+        const tbody = document.getElementById('servers-tbody');
+        if (!tbody) return;
+
+        if (result.servers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center;">暂无服务器</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = result.servers.map(server => `
+            <tr>
+                <td>${server.id}</td>
+                <td>${server.name}</td>
+                <td>${server.url}</td>
+                <td>${server.description || '-'}</td>
+                <td>${server.provider || '-'}</td>
+                <td>${server.maintainer || '-'}</td>
+                <td>${typeof server.registeredUserCount === 'number' ? server.registeredUserCount : '-'}</td>
+                <td>
+                    <span class="badge ${server.isActive ? 'badge-success' : 'badge-error'}">
+                        ${server.isActive ? '在线' : '禁用'}
+                    </span>
+                </td>
+                <td>${formatDate(server.createdAt)}</td>
+                <td>
+                    <button class="action-btn btn-success" onclick="editServer(${server.id})" style="margin-right: 0.5rem; background: rgba(59, 130, 246, 0.2); color: #3b82f6; border-color: #3b82f6;">编辑</button>
+                    ${server.isActive ? 
+                        `<button class="action-btn btn-danger" onclick="toggleServer(${server.id}, false)">禁用</button>` :
+                        `<button class="action-btn btn-success" onclick="toggleServer(${server.id}, true)">启用</button>`
+                    }
+                    <button class="action-btn btn-danger" onclick="deleteServer(${server.id})">删除</button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('加载服务器列表失败:', error);
+    }
+}
+
+async function toggleServer(id, isActive) {
+    if (!confirm(`确定要${isActive ? '启用' : '禁用'}该服务器吗？`)) return;
+
+    try {
+        const response = await fetch(`/api/admin/servers/${id}`, {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ isActive })
+        });
+        
+        if (response.ok) {
+            loadServers();
+            loadStats();
+        } else {
+            const data = await response.json();
+            setStatus(data.message || '操作失败', true);
+        }
+    } catch (error) {
+        setStatus('操作失败', true);
+    }
+}
+
+async function deleteServer(id) {
+    if (!confirm('确定要删除该服务器吗？此操作不可恢复！')) return;
+
+    try {
+        const response = await fetch(`/api/admin/servers/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            loadServers();
+            loadStats();
+            setStatus('服务器已删除', false);
+        } else {
+            setStatus('删除失败', true);
+        }
+    } catch (error) {
+        setStatus('删除失败', true);
+    }
+}
+
 
 async function loadStats() {
     try {
@@ -220,6 +441,10 @@ async function loadStats() {
             <div class="stat-card">
                 <h3>总用户数</h3>
                 <div class="value">${stats.totalUsers}</div>
+            </div>
+            <div class="stat-card">
+                <h3>服务器</h3>
+                <div class="value">${stats.activeServers}/${stats.totalServers}</div>
             </div>
             <div class="stat-card">
                 <h3>总邀请码</h3>
@@ -419,7 +644,7 @@ async function loadInviteCodes() {
             return div.innerHTML;
         };
         
-        tbody.innerHTML = result.codes.map(code => {
+        const tbodyHtml = result.codes.map(code => {
             const isExpired = code.expiresAt && new Date(code.expiresAt) < new Date();
             const isUsedUp = code.usedCount >= code.maxUses;
             const isPartiallyUsed = code.usedCount > 0 && code.usedCount < code.maxUses;
@@ -467,6 +692,7 @@ async function loadInviteCodes() {
                 </tr>
             `;
         }).join('');
+        tbody.innerHTML = tbodyHtml;
         
         // 初始化删除按钮状态
         updateDeleteAllButton();
@@ -775,3 +1001,33 @@ async function deleteCodesWithProgress(codesToDelete) {
     loadStats();
 }
 
+// 编辑服务器
+function editServer(id) {
+    // 兼容后端可能返回字符串或数字类型的 id
+    const server = window.currentServers && window.currentServers.find(s => Number(s.id) === Number(id));
+    if (!server) return;
+
+    const form = document.getElementById('edit-server-form');
+    if (!form) return;
+
+    // 填充表单
+    form.elements['id'].value = server.id;
+    form.elements['name'].value = server.name;
+    form.elements['url'].value = server.url;
+    form.elements['admin_username'].value = server.admin_username;
+    form.elements['admin_password'].value = ''; // 不显示密码，只有在修改时才填写
+    form.elements['description'].value = server.description || '';
+    form.elements['provider'].value = server.provider || '';
+    form.elements['maintainer'].value = server.maintainer || '';
+    form.elements['contact'].value = server.contact || '';
+    form.elements['announcement'].value = server.announcement || '';
+
+    // 显示模态框
+    const modal = document.getElementById('edit-server-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeEditModal() {
+    const modal = document.getElementById('edit-server-modal');
+    if (modal) modal.classList.remove('active');
+}

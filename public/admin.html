@@ -423,6 +423,60 @@
         input[type="datetime-local"]::-moz-calendar-picker-indicator:hover {
             opacity: 1;
         }
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-content {
+            background: #1a1d29;
+            /* Match theme - assuming dark theme based on existing styles */
+            background: rgba(16, 18, 26, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 800px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .modal-header h3 {
+            margin: 0;
+            color: var(--text, #fff);
+        }
+        .close-modal {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+        .close-modal:hover {
+            color: var(--text, #fff);
+        }
     </style>
 </head>
 <body>
@@ -437,6 +491,7 @@
 
             <div class="tabs">
                 <button class="tab active" data-tab="users">用户列表</button>
+                <button class="tab" data-tab="servers">服务器管理</button>
                 <button class="tab" data-tab="invites">邀请码管理</button>
             </div>
 
@@ -472,6 +527,86 @@
                     </table>
                 </div>
                 <div id="users-pagination" style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;"></div>
+            </div>
+
+            <div id="servers-tab" class="tab-content">
+                <div class="create-invite-form">
+                    <h3>添加服务器</h3>
+                    <form id="add-server-form">
+                        <div class="form-row">
+                            <label class="field">
+                                <span>服务器名称</span>
+                                <input type="text" name="name" placeholder="例如: 美国节点" required>
+                            </label>
+                            <label class="field">
+                                <span>服务器 URL</span>
+                                <input type="url" name="url" placeholder="http://127.0.0.1:8000" required>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field">
+                                <span>管理员账号</span>
+                                <input type="text" name="admin_username" required>
+                            </label>
+                            <label class="field">
+                                <span>管理员密码</span>
+                                <input type="password" name="admin_password" required>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field" style="grid-column: 1 / -1;">
+                                <span>服务器描述（可选）</span>
+                                <textarea name="description" rows="2" placeholder="例如：地区、性能、适用场景等" style="width: 100%; resize: vertical;"></textarea>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field">
+                                <span>服务器提供方（可选）</span>
+                                <input type="text" name="provider" placeholder="例如：某云服务商 / 个人">
+                            </label>
+                            <label class="field">
+                                <span>维护者（可选）</span>
+                                <input type="text" name="maintainer" placeholder="例如：管理员昵称">
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field">
+                                <span>维护者联系方式（可选）</span>
+                                <input type="text" name="contact" placeholder="例如：邮箱 / Telegram / QQ">
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field" style="grid-column: 1 / -1;">
+                                <span>服务器公告（可选）</span>
+                                <textarea name="announcement" rows="3" placeholder="例如：服务器维护时间、规则说明等" style="width: 100%; resize: vertical;"></textarea>
+                            </label>
+                        </div>
+                        <div style="display: flex; gap: 1rem;">
+                            <button type="button" class="secondary" id="test-connection-btn">测试连接</button>
+                            <button type="submit" class="primary">添加服务器</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>名称</th>
+                                <th>URL</th>
+                                <th>描述</th>
+                                <th>提供方</th>
+                                <th>维护者</th>
+                                <th>已注册用户</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="servers-tbody"></tbody>
+                    </table>
+                </div>
             </div>
 
             <div id="invites-tab" class="tab-content">
@@ -543,6 +678,72 @@
 
             <div id="status" role="status" aria-live="polite"></div>
         </section>
+
+        <!-- Edit Server Modal -->
+        <div id="edit-server-modal" class="modal-overlay">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>编辑服务器</h3>
+                    <button class="close-modal" onclick="closeEditModal()">&times;</button>
+                </div>
+                <form id="edit-server-form">
+                    <input type="hidden" name="id">
+                    <div class="form-row">
+                        <label class="field">
+                            <span>服务器名称</span>
+                            <input type="text" name="name" placeholder="例如: 美国节点" required>
+                        </label>
+                        <label class="field">
+                            <span>服务器 URL</span>
+                            <input type="url" name="url" placeholder="http://127.0.0.1:8000" required>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field">
+                            <span>管理员账号</span>
+                            <input type="text" name="admin_username" required>
+                        </label>
+                        <label class="field">
+                            <span>管理员密码</span>
+                            <input type="password" name="admin_password" placeholder="留空则不修改">
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field" style="grid-column: 1 / -1;">
+                            <span>服务器描述（可选）</span>
+                            <textarea name="description" rows="2" placeholder="例如：地区、性能、适用场景等" style="width: 100%; resize: vertical;"></textarea>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field">
+                            <span>服务器提供方（可选）</span>
+                            <input type="text" name="provider" placeholder="例如：某云服务商 / 个人">
+                        </label>
+                        <label class="field">
+                            <span>维护者（可选）</span>
+                            <input type="text" name="maintainer" placeholder="例如：管理员昵称">
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field">
+                            <span>维护者联系方式（可选）</span>
+                            <input type="text" name="contact" placeholder="例如：邮箱 / Telegram / QQ">
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field" style="grid-column: 1 / -1;">
+                            <span>服务器公告（可选）</span>
+                            <textarea name="announcement" rows="3" placeholder="例如：服务器维护时间、规则说明等" style="width: 100%; resize: vertical;"></textarea>
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                        <button type="button" class="secondary" onclick="closeEditModal()">取消</button>
+                        <button type="submit" class="primary">保存更改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
     </main>
     <script src="admin.js"></script>
 </body>

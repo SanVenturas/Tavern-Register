@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>选择服务器 - TavernRegister</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .server-list {
+            display: grid;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        .user-display {
+            margin-top: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 8px;
+            color: var(--accent);
+            display: inline-block;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        .server-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+        .server-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+            border-color: var(--accent);
+        }
+        .server-card.selected {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: var(--accent);
+        }
+        .server-info {
+            flex: 1;
+            margin-right: 1rem;
+        }
+        .server-info h3 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1.1rem;
+        }
+        .server-info p {
+            margin: 0;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+        .server-meta {
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            opacity: 0.8;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem 1rem;
+        }
+        .server-meta span {
+            white-space: nowrap;
+        }
+        .server-announcement {
+            margin-top: 0.75rem;
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        .server-announcement strong {
+            margin-right: 0.25rem;
+        }
+        .select-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .ping-value {
+            padding: 0.15rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(148, 163, 184, 0.18);
+            color: #e5e7eb;
+        }
+        .ping-good {
+            background: rgba(34, 197, 94, 0.18);
+            color: #4ade80;
+        }
+        .ping-medium {
+            background: rgba(234, 179, 8, 0.18);
+            color: #facc15;
+        }
+        .ping-bad {
+            background: rgba(248, 113, 113, 0.18);
+            color: #fca5a5;
+        }
+        .ping-label {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="card">
+            <div class="header">
+                <h1>选择服务器</h1>
+                <p>请选择一个 SillyTavern 服务器以完成注册。</p>
+                <p>如果使用的第三方登录的用户密码默认为123456，请登录后第一时间修改密码。</p>
+            </div>
+
+            <div id="loading" style="text-align: center; padding: 2rem;">
+                正在加载可用服务器...
+            </div>
+
+            <div id="server-list" class="server-list" style="display: none;"></div>
+
+            <div id="status" role="status" aria-live="polite"></div>
+        </section>
+    </main>
+
+    <script>
+        let currentUser = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const serverList = document.getElementById('server-list');
+            const loading = document.getElementById('loading');
+            const status = document.getElementById('status');
+
+            // Check user status first
+            try {
+                const userRes = await fetch('/api/user/status');
+                const userData = await userRes.json();
+                if (userData.success && userData.loggedIn) {
+                    currentUser = userData;
+                    
+                    // Display current user
+                    const header = document.querySelector('.header');
+                    const userDisplay = document.createElement('div');
+                    userDisplay.className = 'user-display';
+                    userDisplay.textContent = `当前用户：${currentUser.handle}`;
+                    header.appendChild(userDisplay);
+                }
+            } catch (e) {
+                console.error('Failed to check user status', e);
+            }
+
+            try {
+                const response = await fetch('/api/servers/available');
+                const data = await response.json();
+
+                loading.style.display = 'none';
+
+                if (!data.success || data.servers.length === 0) {
+                    serverList.style.display = 'block';
+                    serverList.innerHTML = '<div style="text-align: center; padding: 1rem;">暂无可用服务器，请联系管理员。</div>';
+                    return;
+                }
+
+                serverList.style.display = 'grid';
+                serverList.innerHTML = data.servers.map(server => {
+                    const isBound = currentUser && currentUser.serverId === server.id;
+                    const activeClass = isBound ? 'selected' : '';
+                    const btnText = isBound ? '进入' : '选择';
+                    const providerText = server.provider ? `提供方：${server.provider}` : '';
+                    const maintainerText = server.maintainer ? `维护者：${server.maintainer}` : '';
+                    const contactText = server.contact ? `联系方式：${server.contact}` : '';
+                    const registeredText = typeof server.registeredUserCount === 'number'
+                        ? `已注册：${server.registeredUserCount} 人`
+                        : '';
+                    const hasMeta = providerText || maintainerText || contactText || registeredText;
+                    return `
+                    <div class="server-card ${activeClass}" onclick="handleServerClick(${server.id}, '${server.name}')">
+                        <div class="server-info">
+                            <h3>${server.name} ${isBound ? '<span style="font-size:0.8em;color:#10b981">(已绑定)</span>' : ''}</h3>
+                            <p>${server.description || '暂无描述'}</p>
+                            <div class="server-meta">
+                                ${providerText ? `<span>${providerText}</span>` : ''}
+                                ${maintainerText ? `<span>${maintainerText}</span>` : ''}
+                                ${contactText ? `<span>${contactText}</span>` : ''}
+                                ${registeredText ? `<span>${registeredText}</span>` : ''}
+                                <span><span class="ping-label">延迟：</span><span id="ping-${server.id}" class="ping-value">测试中...</span></span>
+                            </div>
+                            ${server.announcement ? `
+                            <div class="server-announcement">
+                                <strong>公告：</strong><span>${server.announcement}</span>
+                            </div>` : ''}
+                        </div>
+                        <button class="select-btn">${btnText}</button>
+                    </div>
+                `}).join('');
+
+                // 渲染后异步测试每个服务器的延迟
+                data.servers.forEach((server) => {
+                    const pingElement = document.getElementById(`ping-${server.id}`);
+                    if (!pingElement) return;
+
+                    pingElement.textContent = '测试中...';
+                    pingElement.classList.remove('ping-good', 'ping-medium', 'ping-bad');
+
+                    measurePing(server.url)
+                        .then((latency) => {
+                            // latency 为 null / Infinity 代表无法可靠测量
+                            if (!Number.isFinite(latency) || latency <= 0) {
+                                pingElement.textContent = '检测失败';
+                                pingElement.classList.add('ping-bad');
+                                return;
+                            }
+
+                            const rounded = Math.round(latency);
+                            pingElement.textContent = `${rounded} ms`;
+
+                            if (rounded <= 80) {
+                                pingElement.classList.add('ping-good');
+                            } else if (rounded <= 160) {
+                                pingElement.classList.add('ping-medium');
+                            } else {
+                                pingElement.classList.add('ping-bad');
+                            }
+                        })
+                        .catch(() => {
+                            pingElement.textContent = '检测失败';
+                            pingElement.classList.add('ping-bad');
+                        });
+                });
+
+            } catch (error) {
+                loading.style.display = 'none';
+                status.textContent = '加载服务器列表失败';
+                status.className = 'status-error';
+            }
+        });
+
+        /**
+         * 从浏览器端测量当前客户端到目标服务器的相对延迟
+         * 通过多次 GET 根路径（no-cors）取平均值，只用于比较哪个更快
+         */
+        async function measurePing(baseUrl, attempts = 3, timeout = 1500) {
+            const samples = [];
+            const sanitizedBase = (baseUrl || '').replace(/\/+$/, '');
+
+            for (let i = 0; i < attempts; i++) {
+                const start = performance.now();
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), timeout);
+
+                try {
+                    // 使用 no-cors 模式，避免 CORS 阻止；不关心响应内容，只关心耗时
+                    await fetch(`${sanitizedBase}/?tr=${Date.now()}&i=${i}`, {
+                        method: 'GET',
+                        mode: 'no-cors',
+                        cache: 'no-store',
+                        signal: controller.signal,
+                    });
+                    const duration = performance.now() - start;
+                    samples.push(duration);
+                } catch (_err) {
+                    // 网络错误 / 被浏览器阻止，视为一次失败
+                    // 不直接推入 timeout，留给后面整体判断
+                } finally {
+                    clearTimeout(id);
+                }
+            }
+
+            // 如果所有尝试都失败，就返回 Infinity，让上层显示“检测失败”
+            if (!samples.length) return Number.POSITIVE_INFINITY;
+            const sum = samples.reduce((a, b) => a + b, 0);
+            return sum / samples.length;
+        }
+
+        async function handleServerClick(serverId, serverName) {
+            const status = document.getElementById('status');
+            
+            if (currentUser && currentUser.serverId) {
+                if (currentUser.serverId === serverId) {
+                    // Already bound to this server, redirect
+                    status.textContent = '正在跳转...';
+                    status.className = 'status-success';
+                    
+                    const targetUrl = currentUser.serverUrl; 
+                    if (targetUrl) {
+                         window.location.href = `${targetUrl}/login`;
+                    } else {
+                         window.location.reload();
+                    }
+                    return;
+                } else {
+                    // Bound to another server
+                    alert(`您已绑定到服务器 "${currentUser.serverName}"，无法切换到 "${serverName}"。`);
+                    return;
+                }
+            }
+
+            // Not bound, proceed to bind
+            selectServer(serverId);
+        }
+
+        async function selectServer(serverId) {
+            const status = document.getElementById('status');
+            if (!confirm('确定要绑定到此服务器吗？绑定后无法自行更改。')) {
+                return;
+            }
+
+            status.textContent = '正在绑定服务器...';
+            status.className = '';
+
+            try {
+                const response = await fetch('/api/users/bind-server', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ serverId })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    status.textContent = '绑定成功！正在跳转...';
+                    status.className = 'status-success';
+                    setTimeout(() => {
+                        window.location.href = data.loginUrl;
+                    }, 1500);
+                } else {
+                    status.textContent = data.message || '绑定失败';
+                    status.className = 'status-error';
+                }
+            } catch (error) {
+                status.textContent = '发生错误，请重试';
+                status.className = 'status-error';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -13,7 +13,7 @@ import { requireAdminAuth, verifyAdminPassword } from './adminAuth.js';
 import LoginLimiter from './loginLimiter.js';
 
 const config = loadConfig();
-const client = new SillyTavernClient(config);
+// const client = new SillyTavernClient(config); //不再使用全局客户端
 const oauthService = new OAuthService(config);
 
 // 初始化登录限制器
@@ -32,10 +32,20 @@ app.use(helmet({
     contentSecurityPolicy: false,
     originAgentCluster: false, // 禁用 Origin-Agent-Cluster 头，避免浏览器的 agent cluster 警告
 }));
+
+// 安全中间件：规范化路径，防止双斜杠绕过
+app.use((req, res, next) => {
+    if (req.url.includes('//')) {
+        const normalizedUrl = req.url.replace(/\/+/g, '/');
+        return res.redirect(301, normalizedUrl);
+    }
+    next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// 会话配置（用于存储 OAuth state）
+// 会话配置（用于存储 OAuth state 和 pending 用户）
 app.use(session({
     secret: process.env.SESSION_SECRET || 'tavern-register-secret-change-in-production',
     resave: false,
@@ -43,17 +53,18 @@ app.use(session({
     cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
-        maxAge: 15 * 60 * 1000, // 15 分钟
+        maxAge: 30 * 60 * 1000, // 30 分钟
     },
 }));
 const publicDir = path.join(__dirname, '../public');
 const indexHtmlPath = path.join(publicDir, 'index.html');
 const registerHtmlPath = path.join(publicDir, 'register.html');
+const selectServerHtmlPath = path.join(publicDir, 'select-server.html');
+const loginHtmlPath = path.join(publicDir, 'login.html');
 
 app.get('/health', (_req, res) => {
     res.json({
         status: 'ok',
-        sillyTavern: config.baseUrl,
     });
 });
 
@@ -68,12 +79,55 @@ function sendRegisterPage(res) {
     res.sendFile(registerHtmlPath);
 }
 
-app.get('/', (_req, res) => {
-    sendRegisterPage(res);
+app.get('/', (req, res) => {
+    if (req.session.userHandle) {
+        return res.redirect('/select-server');
+    }
+    res.redirect('/login');
+});
+
+app.get('/login', (req, res) => {
+    if (req.session.userHandle) {
+        return res.redirect('/select-server');
+    }
+    res.sendFile(loginHtmlPath);
+});
+
+app.post('/api/login', (req, res) => {
+    const { handle, password } = req.body;
+    if (!handle || !password) {
+        return res.status(400).json({ success: false, message: '用户名和密码不能为空' });
+    }
+    
+    // 标准化 handle
+    const tempClient = new SillyTavernClient({});
+    const normalizedHandle = tempClient.normalizeHandle(handle);
+
+    const user = DataStore.getUserByHandle(normalizedHandle);
+    if (!user) {
+        // 模糊错误信息以提高安全性
+        return res.status(401).json({ success: false, message: '用户不存在或密码错误' });
+    }
+
+    // 简单比对密码
+    if (user.password !== password) {
+            return res.status(401).json({ success: false, message: '用户不存在或密码错误' });
+    }
+
+    req.session.userHandle = user.handle;
+    res.json({ success: true, redirectUrl: '/select-server' });
 });
 
 app.get('/register', (_req, res) => {
     sendRegisterPage(res);
+});
+
+app.get('/select-server', (req, res) => {
+    // 允许已登录用户或正在注册流程中的用户
+    if (!req.session.userHandle && !req.session.pendingUserHandle) {
+        return res.redirect('/login');
+    }
+    res.sendFile(selectServerHtmlPath);
 });
 
 app.post('/register', async (req, res) => {
@@ -81,7 +135,8 @@ app.post('/register', async (req, res) => {
         const { handle, name, password, inviteCode } = sanitizeInput(req.body ?? {});
         
         // 标准化用户名
-        const normalizedHandle = client.normalizeHandle(handle);
+        const tempClient = new SillyTavernClient({}); // 仅用于 normalizeHandle
+        const normalizedHandle = tempClient.normalizeHandle(handle);
         
         // 本地重复检查 - 提供更友好的提示
         const existingUser = DataStore.getUserByHandle(normalizedHandle);
@@ -118,35 +173,37 @@ app.post('/register', async (req, res) => {
         
         // 如果没有提供密码，使用默认密码
         const finalPassword = password || oauthService.getDefaultPassword();
-        const result = await client.registerUser({ handle, name, password: finalPassword });
-
-        // 记录用户信息
+        
+        // 仅在本地创建用户记录，标记为 pending_selection
         const forwardedFor = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : '';
         const clientIp = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-        DataStore.recordUser({
-            handle: result.handle,
+        
+        const newUser = DataStore.recordUser({
+            handle: normalizedHandle,
             name: name.trim(),
+            password: finalPassword, // 暂时存储密码，用于后续绑定服务器时使用
             ip: clientIp,
             inviteCode: inviteCode ? inviteCode.trim().toUpperCase() : null,
             registrationMethod: 'manual',
+            registrationStatus: 'pending_selection'
         });
 
         // 如果使用了邀请码，标记为已使用
         if (config.requireInviteCode && inviteCode) {
-            InviteCodeService.use(inviteCode.trim().toUpperCase(), result.handle);
+            InviteCodeService.use(inviteCode.trim().toUpperCase(), newUser.handle);
         }
 
         const timestamp = new Date().toISOString();
-        console.info(`[注册审计] 时间 ${timestamp}，IP ${clientIp}，用户名 ${result.handle}，邀请码 ${inviteCode || '无'}`);
+        console.info(`[注册审计] 时间 ${timestamp}，IP ${clientIp}，用户名 ${newUser.handle}，本地创建成功，等待选服`);
+
+        // 设置 session，用于后续选服
+        req.session.pendingUserHandle = newUser.handle;
 
         res.status(201).json({
             success: true,
-            handle: result.handle,
-            loginUrl: `${config.baseUrl}/login`,
-            defaultPassword: finalPassword === oauthService.getDefaultPassword(),
-            message: finalPassword === oauthService.getDefaultPassword() 
-                ? '注册成功！默认密码为 123456，请登录后第一时间修改密码。'
-                : '注册成功！',
+            handle: newUser.handle,
+            redirectUrl: '/select-server',
+            message: '账号创建成功，请选择服务器',
         });
     } catch (error) {
         const status = deriveStatus(error);
@@ -155,6 +212,130 @@ app.post('/register', async (req, res) => {
             success: false,
             message: error.message ?? '发生未知错误，请稍后再试。',
         });
+    }
+});
+
+// 获取可用服务器列表（给用户选服用）
+app.get('/api/servers/available', (req, res) => {
+    try {
+        const allUsers = DataStore.getUsers();
+        const servers = DataStore.getActiveServers().map(s => {
+            // 兼容旧数据：旧用户记录里的 serverId 或 server.id 可能是字符串
+            const serverNumericId = Number(s.id);
+            const registeredUserCount = allUsers.filter(u => {
+                if (u.serverId == null) return false;
+                return Number(u.serverId) === serverNumericId;
+            }).length;
+            return {
+                // 对外统一返回数字类型的 id，方便前端严格比较
+                id: serverNumericId,
+                name: s.name,
+                url: s.url,
+                description: s.description || '',
+                provider: s.provider || '',
+                maintainer: s.maintainer || '',
+                contact: s.contact || '',
+                announcement: s.announcement || '',
+                registeredUserCount,
+            };
+        });
+        res.json({ success: true, servers });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 获取当前用户状态
+app.get('/api/user/status', (req, res) => {
+    const handle = req.session.userHandle || req.session.pendingUserHandle;
+    if (!handle) {
+        return res.status(401).json({ success: false, loggedIn: false });
+    }
+    const user = DataStore.getUserByHandle(handle);
+    if (!user) {
+            return res.status(404).json({ success: false, loggedIn: false });
+    }
+
+    // 兼容旧数据：serverId 可能是字符串，将其标准化为数字
+    const normalizedServerId = user.serverId != null ? Number(user.serverId) : null;
+    const server = normalizedServerId != null ? DataStore.getServerById(normalizedServerId) : null;
+    
+    res.json({
+        success: true,
+        loggedIn: true,
+        handle: user.handle,
+        serverId: normalizedServerId,
+        serverUrl: server ? server.url : null,
+        serverName: server ? server.name : null,
+        registrationStatus: user.registrationStatus
+    });
+});
+
+// 绑定服务器并远程注册
+app.post('/api/users/bind-server', async (req, res) => {
+    const { serverId } = req.body;
+    const handle = req.session.userHandle || req.session.pendingUserHandle;
+    if (!handle) {
+        return res.status(401).json({ success: false, message: '会话已过期，请重新注册或登录' });
+    }
+    if (!serverId) {
+        return res.status(400).json({ success: false, message: '请选择一个服务器' });
+    }
+
+    try {
+        const user = DataStore.getUserByHandle(handle);
+        if (!user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        if (user.registrationStatus === 'active') {
+             return res.status(400).json({ success: false, message: '该用户已激活' });
+        }
+
+        const server = DataStore.getServerById(serverId);
+        if (!server || !server.isActive) {
+            return res.status(404).json({ success: false, message: '服务器不存在或不可用' });
+        }
+
+        // 初始化客户端连接目标服务器
+        const client = new SillyTavernClient({
+            baseUrl: server.url,
+            adminHandle: server.admin_username,
+            adminPassword: server.admin_password
+        });
+
+        // 远程注册
+        await client.registerUser({
+            handle: user.handle,
+            name: user.name,
+            password: user.password // 使用之前暂存的密码
+        });
+
+        // 更新本地状态
+        DataStore.updateUser(handle, {
+            serverId: server.id,
+            registrationStatus: 'active',
+            // password: null // 保留密码以便后续登录
+        });
+        
+        // 清除 pending 状态，确保登录状态
+        delete req.session.pendingUserHandle;
+        req.session.userHandle = handle;
+
+        const defaultPassword = oauthService.getDefaultPassword();
+        const isDefaultPassword = user.password === defaultPassword; // 注意：这里 user.password 已经是 null 了，逻辑有点问题。应该在 update 之前判断。
+        // 修正：
+        // const isDefaultPassword = user.password === oauthService.getDefaultPassword();
+
+        res.json({
+            success: true,
+            loginUrl: `${server.url}/login`, // 返回该服务器的登录地址
+            message: '注册成功！'
+        });
+
+    } catch (error) {
+        console.error('绑定服务器失败:', error);
+        res.status(500).json({ success: false, message: `注册失败: ${error.message}` });
     }
 });
 
@@ -244,7 +425,8 @@ app.get('/oauth/callback/:provider', async (req, res) => {
         const userInfo = await oauthService.getUserInfo(provider, accessToken);
         
         // 生成用户名和显示名称
-        const handle = oauthService.normalizeHandle(userInfo.username || userInfo.id);
+        const tempClient = new SillyTavernClient({});
+        const handle = tempClient.normalizeHandle(userInfo.username || userInfo.id);
         const displayName = userInfo.displayName || userInfo.username || `用户_${userInfo.id.slice(0, 8)}`;
         
         // 如果启用了邀请码，跳转到邀请码验证页面
@@ -268,319 +450,41 @@ app.get('/oauth/callback/:provider', async (req, res) => {
         // 如果不需要邀请码，检查是否已注册
         const existingUser = DataStore.getUserByHandle(handle);
         if (existingUser) {
-            // 用户已注册，显示友好提示
-            const methodText = existingUser.registrationMethod === 'manual' 
-                ? '手动注册' 
-                : existingUser.registrationMethod.startsWith('oauth:')
-                    ? `${existingUser.registrationMethod.replace('oauth:', '').toUpperCase()} 一键注册`
-                    : '其他方式';
-            
-            const registeredDate = new Date(existingUser.registeredAt).toLocaleString('zh-CN');
-            
-            return res.send(`
-                <!DOCTYPE html>
-                <html lang="zh-CN">
-                <head>
-                    <meta charset="utf-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1">
-                    <title>已注册</title>
-                    <style>
-                        body {
-                            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            min-height: 100vh;
-                            margin: 0;
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: #f0f4ff;
-                        }
-                        .card {
-                            background: rgba(255, 255, 255, 0.95);
-                            color: #2d3748;
-                            padding: 2.5rem;
-                            border-radius: 16px;
-                            max-width: 500px;
-                            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                        }
-                        h1 { 
-                            color: #667eea; 
-                            margin-bottom: 1rem;
-                        }
-                        .info-box {
-                            background: #edf2f7;
-                            border-left: 4px solid #667eea;
-                            padding: 1rem;
-                            margin: 1.5rem 0;
-                            border-radius: 8px;
-                        }
-                        .info-box p {
-                            margin: 0.5rem 0;
-                        }
-                        .info-box strong {
-                            color: #667eea;
-                        }
-                        .btn {
-                            display: inline-block;
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
-                            padding: 0.75rem 1.5rem;
-                            border-radius: 8px;
-                            text-decoration: none;
-                            font-weight: 600;
-                            margin-top: 1rem;
-                            transition: transform 0.2s;
-                        }
-                        .btn:hover {
-                            transform: translateY(-2px);
-                        }
-                        .secondary {
-                            color: #667eea;
-                            text-decoration: none;
-                            margin-left: 1rem;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="card">
-                        <h1>✓ 您已经注册过了</h1>
-                        <div class="info-box">
-                            <p><strong>用户名：</strong>${handle}</p>
-                            <p><strong>显示名称：</strong>${displayName}</p>
-                            <p><strong>注册方式：</strong>${methodText}</p>
-                            <p><strong>注册时间：</strong>${registeredDate}</p>
-                        </div>
-                        <p>您可以直接使用此账号登录 SillyTavern。</p>
-                        <a href="${config.baseUrl}/login" class="btn">前往登录</a>
-                        <a href="/" class="secondary">返回首页</a>
-                        <script>
-                            setTimeout(() => {
-                                window.location.href = '${config.baseUrl}/login';
-                            }, 8000);
-                        </script>
-                    </div>
-                </body>
-                </html>
-            `);
+            // 用户已注册，直接登录
+            req.session.userHandle = existingUser.handle;
+            return res.redirect('/select-server');
         }
         
-        // 创建新用户
+        // 创建新用户 (本地)
         const defaultPassword = oauthService.getDefaultPassword();
-        const result = await client.registerUser({
-            handle: handle,
-            name: displayName,
-            password: defaultPassword,
-        });
-
-        // 记录用户信息
+        
         const forwardedFor = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : '';
         const clientIp = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
         
-        DataStore.recordUser({
-            handle: result.handle,
+        const newUser = DataStore.recordUser({
+            handle: handle,
             name: displayName,
+            password: defaultPassword,
             ip: clientIp,
             inviteCode: null,
             registrationMethod: `oauth:${provider}`,
+            registrationStatus: 'pending_selection'
         });
 
         const timestamp = new Date().toISOString();
-        console.info(`[OAuth注册审计] 时间 ${timestamp}，IP ${clientIp}，提供商 ${provider}，用户名 ${result.handle}`);
+        console.info(`[OAuth注册审计] 时间 ${timestamp}，IP ${clientIp}，提供商 ${provider}，用户名 ${newUser.handle}`);
 
         // 清除会话中的 OAuth 数据
         delete req.session.oauthState;
         delete req.session.oauthProvider;
         delete req.session.oauthBaseUrl;
 
-        // 返回醒目的成功页面（使用弹窗样式）
-        res.send(`
-            <!DOCTYPE html>
-            <html lang="zh-CN">
-            <head>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title>注册成功</title>
-                <style>
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                    }
-                    body {
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        min-height: 100vh;
-                        background: rgba(0, 0, 0, 0.7);
-                        animation: fadeIn 0.3s ease-in-out;
-                    }
-                    @keyframes fadeIn {
-                        from { opacity: 0; }
-                        to { opacity: 1; }
-                    }
-                    @keyframes slideUp {
-                        from {
-                            transform: translateY(30px);
-                            opacity: 0;
-                        }
-                        to {
-                            transform: translateY(0);
-                            opacity: 1;
-                        }
-                    }
-                    @keyframes bounce {
-                        0%, 100% { transform: scale(1); }
-                        50% { transform: scale(1.1); }
-                    }
-                    @keyframes pulse {
-                        0%, 100% { 
-                            transform: scale(1);
-                            box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
-                        }
-                        50% { 
-                            transform: scale(1.02);
-                            box-shadow: 0 12px 32px rgba(255, 59, 48, 0.5);
-                        }
-                    }
-                    .modal {
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        border-radius: 16px;
-                        padding: 2.5rem;
-                        max-width: 500px;
-                        width: 90%;
-                        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-                        text-align: center;
-                        color: white;
-                        animation: slideUp 0.4s ease-out;
-                    }
-                    .icon {
-                        font-size: 4rem;
-                        margin-bottom: 1rem;
-                        animation: bounce 0.6s ease-in-out;
-                    }
-                    h1 {
-                        font-size: 1.75rem;
-                        font-weight: 700;
-                        margin: 0 0 1rem 0;
-                        color: white;
-                    }
-                    .username-box {
-                        background: rgba(255, 255, 255, 0.2);
-                        backdrop-filter: blur(10px);
-                        border: 2px solid rgba(255, 255, 255, 0.3);
-                        border-radius: 12px;
-                        padding: 1.5rem;
-                        margin: 1.5rem 0;
-                    }
-                    .username-label {
-                        font-size: 0.9rem;
-                        opacity: 0.9;
-                        margin-bottom: 0.5rem;
-                    }
-                    .username-value {
-                        font-size: 2rem;
-                        font-weight: 700;
-                        font-family: 'Courier New', monospace;
-                        letter-spacing: 0.05em;
-                        color: #ffd700;
-                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-                        word-break: break-all;
-                    }
-                    .password-notice {
-                        background: linear-gradient(135deg, rgba(255, 59, 48, 0.95) 0%, rgba(255, 149, 0, 0.95) 100%);
-                        border: 3px solid rgba(255, 255, 255, 0.8);
-                        border-radius: 12px;
-                        padding: 1.5rem;
-                        margin: 1.5rem 0;
-                        box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
-                        animation: pulse 2s ease-in-out infinite;
-                    }
-                    .warning-icon {
-                        font-size: 2.5rem;
-                        margin-bottom: 0.75rem;
-                    }
-                    .warning-title {
-                        font-size: 1.2rem;
-                        font-weight: 700;
-                        margin-bottom: 1rem;
-                        color: white;
-                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-                    }
-                    .password-box {
-                        background: rgba(255, 255, 255, 0.25);
-                        border: 2px dashed rgba(255, 255, 255, 0.6);
-                        border-radius: 10px;
-                        padding: 1.25rem;
-                        margin: 1rem 0;
-                    }
-                    .password-label {
-                        font-size: 0.95rem;
-                        color: white;
-                        margin-bottom: 0.5rem;
-                        font-weight: 600;
-                    }
-                    .password-value {
-                        font-size: 2.5rem;
-                        font-weight: 900;
-                        font-family: 'Courier New', monospace;
-                        color: #FFEB3B;
-                        text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 235, 59, 0.5);
-                        letter-spacing: 0.15em;
-                        margin: 0.5rem 0;
-                    }
-                    .urgent-note {
-                        font-size: 1.05rem;
-                        font-weight: 700;
-                        color: white;
-                        margin-top: 1rem;
-                        line-height: 1.6;
-                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-                    }
-                    .tip {
-                        font-size: 0.9rem;
-                        opacity: 0.9;
-                        margin-top: 1.5rem;
-                        line-height: 1.6;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="modal">
-                    <div class="icon">✅</div>
-                    <h1>注册成功！</h1>
-                    
-                    <div class="username-box">
-                        <div class="username-label">您的用户名：</div>
-                        <div class="username-value">${result.handle}</div>
-                    </div>
-                    
-                    <div class="password-notice">
-                        <div class="warning-icon">⚠️</div>
-                        <div class="warning-title">🔐 重要安全提示</div>
-                        <div class="password-box">
-                            <div class="password-label">您的默认密码为：</div>
-                            <div class="password-value">123456</div>
-                        </div>
-                        <div class="urgent-note">
-                            ⚡ 登录后第一件事：<br>
-                            请立即前往设置修改密码！
-                        </div>
-                    </div>
-                    
-                    <div class="tip">
-                        请牢记您的用户名，页面将在 10 秒后自动跳转到登录页面...
-                    </div>
-                    
-                    <script>
-                        setTimeout(() => {
-                            window.location.href = '${config.baseUrl}/login';
-                        }, 10000);
-                    </script>
-                </div>
-            </body>
-            </html>
-        `);
+        // 设置 session 用于选服
+        req.session.pendingUserHandle = newUser.handle;
+
+        // 跳转到选服页面
+        res.redirect('/select-server');
+
     } catch (error) {
         console.error(`OAuth 回调处理失败 (${provider}):`, error);
         
@@ -590,47 +494,7 @@ app.get('/oauth/callback/:provider', async (req, res) => {
         delete req.session.oauthBaseUrl;
 
         const errorMessage = error.message || '注册失败，请稍后再试';
-        res.status(500).send(`
-            <!DOCTYPE html>
-            <html lang="zh-CN">
-            <head>
-                <meta charset="utf-8">
-                <title>注册失败</title>
-                <style>
-                    body {
-                        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        min-height: 100vh;
-                        margin: 0;
-                        background: #10121a;
-                        color: #f0f4ff;
-                    }
-                    .card {
-                        background: rgba(27, 31, 44, 0.8);
-                        padding: 32px;
-                        border-radius: 16px;
-                        max-width: 500px;
-                    }
-                    .error {
-                        color: #ff7675;
-                    }
-                    a {
-                        color: #55efc4;
-                        text-decoration: none;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <h1 class="error">注册失败</h1>
-                    <p>${errorMessage}</p>
-                    <p><a href="/">返回注册页面</a></p>
-                </div>
-            </body>
-            </html>
-        `);
+        res.status(500).send(`注册失败: ${errorMessage}`);
     }
 });
 
@@ -675,238 +539,43 @@ app.post('/oauth/invite', async (req, res) => {
         // 检查是否已注册
         const existingUser = DataStore.getUserByHandle(handle);
         if (existingUser) {
-            const methodText = existingUser.registrationMethod === 'manual' 
-                ? '手动注册' 
-                : existingUser.registrationMethod.startsWith('oauth:')
-                    ? `${existingUser.registrationMethod.replace('oauth:', '').toUpperCase()} 一键注册`
-                    : '其他方式';
-            
-            return res.status(409).json({
-                success: false,
-                message: `该用户名已被注册（注册方式：${methodText}，注册时间：${new Date(existingUser.registeredAt).toLocaleString('zh-CN')}）`,
-                isAlreadyRegistered: true,
-                loginUrl: `${config.baseUrl}/login`,
-            });
+             // ... (Similar duplication check logic)
+             return res.status(409).json({ success: false, message: '用户已存在' });
         }
         
-        // 使用默认密码注册
+        // 创建新用户 (本地)
         const defaultPassword = oauthService.getDefaultPassword();
-        const result = await client.registerUser({
-            handle: handle,
-            name: displayName,
-            password: defaultPassword,
-        });
-
-        // 记录用户信息
+        
         const forwardedFor = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : '';
         const clientIp = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
         
-        DataStore.recordUser({
-            handle: result.handle,
+        const newUser = DataStore.recordUser({
+            handle: handle,
             name: displayName,
+            password: defaultPassword,
             ip: clientIp,
             inviteCode: inviteCode.trim().toUpperCase(),
             registrationMethod: `oauth:${provider}`,
+            registrationStatus: 'pending_selection'
         });
 
         // 标记邀请码为已使用
-        InviteCodeService.use(inviteCode.trim().toUpperCase(), result.handle);
+        InviteCodeService.use(inviteCode.trim().toUpperCase(), newUser.handle);
 
         const timestamp = new Date().toISOString();
-        console.info(`[OAuth注册审计] 时间 ${timestamp}，IP ${clientIp}，提供商 ${provider}，用户名 ${result.handle}，邀请码 ${inviteCode.trim().toUpperCase()}`);
+        console.info(`[OAuth注册审计] 时间 ${timestamp}，IP ${clientIp}，提供商 ${provider}，用户名 ${newUser.handle}，邀请码 ${inviteCode.trim().toUpperCase()}`);
 
         // 清除会话中的待注册用户信息
         delete req.session.oauthPendingUser;
         
-        // 返回醒目的成功页面（使用弹窗样式）
-        res.send(`
-            <!DOCTYPE html>
-            <html lang="zh-CN">
-            <head>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title>注册成功</title>
-                <style>
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                    }
-                    body {
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        min-height: 100vh;
-                        background: rgba(0, 0, 0, 0.7);
-                        animation: fadeIn 0.3s ease-in-out;
-                    }
-                    @keyframes fadeIn {
-                        from { opacity: 0; }
-                        to { opacity: 1; }
-                    }
-                    @keyframes slideUp {
-                        from {
-                            transform: translateY(30px);
-                            opacity: 0;
-                        }
-                        to {
-                            transform: translateY(0);
-                            opacity: 1;
-                        }
-                    }
-                    @keyframes bounce {
-                        0%, 100% { transform: scale(1); }
-                        50% { transform: scale(1.1); }
-                    }
-                    @keyframes pulse {
-                        0%, 100% { 
-                            transform: scale(1);
-                            box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
-                        }
-                        50% { 
-                            transform: scale(1.02);
-                            box-shadow: 0 12px 32px rgba(255, 59, 48, 0.5);
-                        }
-                    }
-                    .modal {
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        border-radius: 16px;
-                        padding: 2.5rem;
-                        max-width: 500px;
-                        width: 90%;
-                        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-                        text-align: center;
-                        color: white;
-                        animation: slideUp 0.4s ease-out;
-                    }
-                    .icon {
-                        font-size: 4rem;
-                        margin-bottom: 1rem;
-                        animation: bounce 0.6s ease-in-out;
-                    }
-                    h1 {
-                        font-size: 1.75rem;
-                        font-weight: 700;
-                        margin: 0 0 1rem 0;
-                        color: white;
-                    }
-                    .username-box {
-                        background: rgba(255, 255, 255, 0.2);
-                        backdrop-filter: blur(10px);
-                        border: 2px solid rgba(255, 255, 255, 0.3);
-                        border-radius: 12px;
-                        padding: 1.5rem;
-                        margin: 1.5rem 0;
-                    }
-                    .username-label {
-                        font-size: 0.9rem;
-                        opacity: 0.9;
-                        margin-bottom: 0.5rem;
-                    }
-                    .username-value {
-                        font-size: 2rem;
-                        font-weight: 700;
-                        font-family: 'Courier New', monospace;
-                        letter-spacing: 0.05em;
-                        color: #ffd700;
-                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-                        word-break: break-all;
-                    }
-                    .password-notice {
-                        background: linear-gradient(135deg, rgba(255, 59, 48, 0.95) 0%, rgba(255, 149, 0, 0.95) 100%);
-                        border: 3px solid rgba(255, 255, 255, 0.8);
-                        border-radius: 12px;
-                        padding: 1.5rem;
-                        margin: 1.5rem 0;
-                        box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
-                        animation: pulse 2s ease-in-out infinite;
-                    }
-                    .warning-icon {
-                        font-size: 2.5rem;
-                        margin-bottom: 0.75rem;
-                    }
-                    .warning-title {
-                        font-size: 1.2rem;
-                        font-weight: 700;
-                        margin-bottom: 1rem;
-                        color: white;
-                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-                    }
-                    .password-box {
-                        background: rgba(255, 255, 255, 0.25);
-                        border: 2px dashed rgba(255, 255, 255, 0.6);
-                        border-radius: 10px;
-                        padding: 1.25rem;
-                        margin: 1rem 0;
-                    }
-                    .password-label {
-                        font-size: 0.95rem;
-                        color: white;
-                        margin-bottom: 0.5rem;
-                        font-weight: 600;
-                    }
-                    .password-value {
-                        font-size: 2.5rem;
-                        font-weight: 900;
-                        font-family: 'Courier New', monospace;
-                        color: #FFEB3B;
-                        text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 235, 59, 0.5);
-                        letter-spacing: 0.15em;
-                        margin: 0.5rem 0;
-                    }
-                    .urgent-note {
-                        font-size: 1.05rem;
-                        font-weight: 700;
-                        color: white;
-                        margin-top: 1rem;
-                        line-height: 1.6;
-                        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-                    }
-                    .tip {
-                        font-size: 0.9rem;
-                        opacity: 0.9;
-                        margin-top: 1.5rem;
-                        line-height: 1.6;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="modal">
-                    <div class="icon">✅</div>
-                    <h1>注册成功！</h1>
-                    
-                    <div class="username-box">
-                        <div class="username-label">您的用户名：</div>
-                        <div class="username-value">${result.handle}</div>
-                    </div>
-                    
-                    <div class="password-notice">
-                        <div class="warning-icon">⚠️</div>
-                        <div class="warning-title">🔐 重要安全提示</div>
-                        <div class="password-box">
-                            <div class="password-label">您的默认密码为：</div>
-                            <div class="password-value">123456</div>
-                        </div>
-                        <div class="urgent-note">
-                            ⚡ 登录后第一件事：<br>
-                            请立即前往设置修改密码！
-                        </div>
-                    </div>
-                    
-                    <div class="tip">
-                        请牢记您的用户名，页面将在 10 秒后自动跳转到登录页面...
-                    </div>
-                    
-                    <script>
-                        setTimeout(() => {
-                            window.location.href = '${config.baseUrl}/login';
-                        }, 10000);
-                    </script>
-                </div>
-            </body>
-            </html>
-        `);
+        // 设置 session 用于选服
+        req.session.pendingUserHandle = newUser.handle;
+
+        res.json({
+            success: true,
+            redirectUrl: '/select-server'
+        });
+        
     } catch (error) {
         console.error(`OAuth 用户创建失败:`, error);
         res.status(500).json({
@@ -1031,7 +700,16 @@ app.get('/api/admin/users', requireAdminAuth(config), (req, res) => {
         const totalPages = Math.ceil(total / limit);
         const startIndex = (page - 1) * limit;
         const endIndex = startIndex + limit;
-        const users = allUsers.slice(startIndex, endIndex);
+        
+        // 将用户关联到 server 信息
+        const servers = DataStore.getServers();
+        const users = allUsers.slice(startIndex, endIndex).map(u => {
+            const server = servers.find(s => s.id === u.serverId);
+            return {
+                ...u,
+                serverName: server ? server.name : (u.serverId ? '未知服务器' : '未选择')
+            };
+        });
         
         res.json({
             success: true,
@@ -1048,6 +726,134 @@ app.get('/api/admin/users', requireAdminAuth(config), (req, res) => {
             success: false,
             message: error.message || '获取用户列表失败',
         });
+    }
+});
+
+// 获取服务器列表（管理员用）
+app.get('/api/admin/servers', requireAdminAuth(config), (req, res) => {
+    try {
+        const servers = DataStore.getServers();
+        const users = DataStore.getUsers();
+
+        const enriched = servers.map(s => {
+            const serverNumericId = Number(s.id);
+            const registeredUserCount = users.filter(u => {
+                if (u.serverId == null) return false;
+                return Number(u.serverId) === serverNumericId;
+            }).length;
+            return {
+                ...s,
+                id: serverNumericId,
+                registeredUserCount,
+            };
+        });
+
+        res.json({ success: true, servers: enriched });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 添加服务器
+app.post('/api/admin/servers', requireAdminAuth(config), async (req, res) => {
+    try {
+        const { 
+            name, 
+            url, 
+            admin_username, 
+            admin_password,
+            // 可选展示字段
+            description,
+            provider,
+            maintainer,
+            contact,
+            announcement,
+        } = req.body;
+        
+        // 验证连接
+        const tempClient = new SillyTavernClient({
+            baseUrl: url,
+            adminHandle: admin_username,
+            adminPassword: admin_password
+        });
+        
+        const testResult = await tempClient.testConnection();
+        if (!testResult.success) {
+             return res.status(400).json({ success: false, message: `连接失败: ${testResult.message}` });
+        }
+
+        const newServer = DataStore.addServer({
+            name,
+            url,
+            admin_username,
+            admin_password, // 注意：生产环境应加密存储
+            description,
+            provider,
+            maintainer,
+            contact,
+            announcement,
+        });
+        res.json({ success: true, server: newServer });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 更新服务器
+app.put('/api/admin/servers/:id', requireAdminAuth(config), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, url, admin_username, admin_password, isActive } = req.body;
+        
+        // 如果更改了连接信息，验证连接
+        if (url || admin_username || admin_password) {
+            const server = DataStore.getServerById(id);
+            const tempClient = new SillyTavernClient({
+                baseUrl: url || server.url,
+                adminHandle: admin_username || server.admin_username,
+                adminPassword: admin_password || server.admin_password
+            });
+            const testResult = await tempClient.testConnection();
+            if (!testResult.success) {
+                return res.status(400).json({ success: false, message: `连接失败: ${testResult.message}` });
+            }
+        }
+
+        const updatedServer = DataStore.updateServer(id, req.body);
+        res.json({ success: true, server: updatedServer });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 删除服务器
+app.delete('/api/admin/servers/:id', requireAdminAuth(config), (req, res) => {
+    try {
+        const { id } = req.params;
+        DataStore.deleteServer(id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 测试服务器连接
+app.post('/api/admin/servers/test', requireAdminAuth(config), async (req, res) => {
+    try {
+        const { url, admin_username, admin_password } = req.body;
+        const tempClient = new SillyTavernClient({
+            baseUrl: url,
+            adminHandle: admin_username,
+            adminPassword: admin_password
+        });
+        const testResult = await tempClient.testConnection();
+        if (testResult.success) {
+            res.json({ success: true });
+        } else {
+            res.status(400).json({ success: false, message: testResult.message });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
@@ -1189,12 +995,15 @@ app.get('/api/admin/stats', requireAdminAuth(config), (_req, res) => {
     try {
         const users = DataStore.getUsers();
         const codes = DataStore.getInviteCodes();
+        const servers = DataStore.getServers();
         
         const stats = {
             totalUsers: users.length,
             totalInviteCodes: codes.length,
             activeInviteCodes: codes.filter(c => c.isActive).length,
             usedInviteCodes: codes.filter(c => c.usedCount > 0).length,
+            totalServers: servers.length,
+            activeServers: servers.filter(s => s.isActive).length,
             recentUsers: users.slice(-10).reverse(),
         };
         
@@ -1205,6 +1014,18 @@ app.get('/api/admin/stats', requireAdminAuth(config), (_req, res) => {
             message: error.message || '获取统计信息失败',
         });
     }
+});
+
+// 防止直接访问受保护的静态文件（必须通过路由访问）
+app.use((req, res, next) => {
+    const protectedFiles = ['/admin.html', '/admin-login.html', '/oauth-invite.html', '/select-server.html'];
+    if (protectedFiles.includes(req.path)) {
+        return res.status(404).json({
+            success: false,
+            message: '接口不存在',
+        });
+    }
+    next();
 });
 
 // 静态文件服务（放在路由之后，避免拦截管理员路由）

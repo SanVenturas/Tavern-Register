@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, '../data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const INVITE_CODES_FILE = path.join(DATA_DIR, 'invite-codes.json');
+const SERVERS_FILE = path.join(DATA_DIR, 'servers.json');
 
 // 确保数据目录存在
 if (!fs.existsSync(DATA_DIR)) {
@@ -53,10 +54,25 @@ export class DataStore {
             ...userInfo,
             registeredAt: new Date().toISOString(),
             id: users.length + 1,
+            registrationStatus: userInfo.registrationStatus || 'pending_selection', // pending_selection, active
+            serverId: userInfo.serverId || null,
         };
         users.push(record);
         writeJsonFile(USERS_FILE, users);
         return record;
+    }
+
+    /**
+     * 更新用户状态
+     */
+    static updateUser(handle, updates) {
+        const users = readJsonFile(USERS_FILE, []);
+        const userIndex = users.findIndex(u => u.handle === handle);
+        if (userIndex === -1) return null;
+
+        users[userIndex] = { ...users[userIndex], ...updates };
+        writeJsonFile(USERS_FILE, users);
+        return users[userIndex];
     }
 
     /**
@@ -72,6 +88,81 @@ export class DataStore {
     static getUserByHandle(handle) {
         const users = readJsonFile(USERS_FILE, []);
         return users.find(u => u.handle === handle);
+    }
+
+    /**
+     * 添加服务器
+     */
+    static addServer(serverInfo) {
+        const servers = readJsonFile(SERVERS_FILE, []);
+        const newServer = {
+            id: servers.length > 0 ? Math.max(...servers.map(s => s.id)) + 1 : 1,
+            // 基础信息
+            name: serverInfo.name,
+            url: serverInfo.url,
+            admin_username: serverInfo.admin_username,
+            admin_password: serverInfo.admin_password,
+            // 展示信息（可选）
+            description: serverInfo.description || '',      // 服务器描述
+            provider: serverInfo.provider || '',          // 服务器提供方
+            maintainer: serverInfo.maintainer || '',      // 维护者
+            contact: serverInfo.contact || '',            // 联系方式
+            announcement: serverInfo.announcement || '',  // 公告
+            createdAt: new Date().toISOString(),
+            isActive: true,
+        };
+        servers.push(newServer);
+        writeJsonFile(SERVERS_FILE, servers);
+        return newServer;
+    }
+
+    /**
+     * 获取所有服务器
+     */
+    static getServers() {
+        return readJsonFile(SERVERS_FILE, []);
+    }
+
+    /**
+     * 获取可用服务器
+     */
+    static getActiveServers() {
+        const servers = readJsonFile(SERVERS_FILE, []);
+        return servers.filter(s => s.isActive);
+    }
+
+    /**
+     * 根据 ID 获取服务器
+     */
+    static getServerById(id) {
+        const servers = readJsonFile(SERVERS_FILE, []);
+        const targetId = Number(id);
+        return servers.find(s => Number(s.id) === targetId);
+    }
+
+    /**
+     * 更新服务器
+     */
+    static updateServer(id, updates) {
+        const servers = readJsonFile(SERVERS_FILE, []);
+        const targetId = Number(id);
+        const index = servers.findIndex(s => Number(s.id) === targetId);
+        if (index === -1) return null;
+
+        servers[index] = { ...servers[index], ...updates };
+        writeJsonFile(SERVERS_FILE, servers);
+        return servers[index];
+    }
+
+    /**
+     * 删除服务器
+     */
+    static deleteServer(id) {
+        const servers = readJsonFile(SERVERS_FILE, []);
+        const targetId = Number(id);
+        const filtered = servers.filter(s => Number(s.id) !== targetId);
+        writeJsonFile(SERVERS_FILE, filtered);
+        return filtered.length < servers.length;
     }
 
     /**
@@ -180,4 +271,3 @@ export class DataStore {
         return false;
     }
 }
-

@@ -33,13 +33,8 @@ function normalizeHandle(value) {
 document.addEventListener('DOMContentLoaded', () => {
     const formElement = document.getElementById('register-form');
     const loginLinkElement = document.getElementById('login-link');
-    const oauthProvidersElement = document.getElementById('oauth-providers');
-    const oauthButtonsElement = document.getElementById('oauth-buttons');
     const form = formElement instanceof HTMLFormElement ? formElement : null;
     const loginLink = loginLinkElement instanceof HTMLAnchorElement ? loginLinkElement : null;
-
-    // 加载 OAuth 提供商
-    loadOAuthProviders();
     
     // 检查是否需要邀请码
     checkInviteCodeRequirement();
@@ -164,6 +159,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             form.reset();
+
+            if (data.redirectUrl) {
+                window.location.href = data.redirectUrl;
+                return;
+            }
+
             // 获取实际注册的用户名
             const actualHandle = data.handle || requestBody.handle;
             
@@ -187,46 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 加载 OAuth 提供商
-    async function loadOAuthProviders() {
-        try {
-            const response = await fetch('/oauth/providers', {
-                headers: { accept: 'application/json' },
-            });
-            
-            if (!response.ok) {
-                return;
-            }
-
-            const data = await response.json();
-            const providers = data.providers || [];
-
-            if (providers.length === 0) {
-                return;
-            }
-
-            // 显示 OAuth 区域
-            if (oauthProvidersElement) {
-                oauthProvidersElement.style.display = 'block';
-            }
-
-            // 创建 OAuth 按钮
-            if (oauthButtonsElement) {
-                oauthButtonsElement.innerHTML = '';
-                for (const provider of providers) {
-                    const button = document.createElement('a');
-                    button.className = `oauth-button ${provider.id}`;
-                    button.href = `/oauth/auth/${provider.id}`;
-                    button.textContent = `使用 ${provider.name} 注册`;
-                    oauthButtonsElement.appendChild(button);
-                }
-            }
-        } catch (error) {
-            // 静默失败，不影响正常注册流程
-            console.debug('无法加载 OAuth 提供商:', error);
-        }
-    }
-    
     // 设置用户名实时预览
     function setupHandlePreview() {
         const handleInput = form?.querySelector('input[name="handle"]');
