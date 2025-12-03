@@ -570,10 +570,15 @@ app.post('/oauth/invite', async (req, res) => {
         
         // 设置 session 用于选服
         req.session.pendingUserHandle = newUser.handle;
-
+        
+        // 返回用户名和后续跳转地址，便于前端在成功弹窗中正确展示
         res.json({
             success: true,
-            redirectUrl: '/select-server'
+            handle: newUser.handle,
+            // OAuth 流程下此时用户尚未绑定具体 SillyTavern 服务器，
+            // 先跳转到本系统的选服页面，由用户选择服务器后再完成远程注册。
+            loginUrl: '/select-server',
+            redirectUrl: '/select-server',
         });
         
     } catch (error) {
