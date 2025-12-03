@@ -2,12 +2,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const REQUIRED_ENV = [
-    'SILLYTAVERN_BASE_URL',
-    'SILLYTAVERN_ADMIN_HANDLE',
-    'SILLYTAVERN_ADMIN_PASSWORD',
-];
-
 /**
  * 解析布尔值环境变量
  * @param {string|undefined} value
@@ -43,30 +37,31 @@ const OPTIONAL_OAUTH_ENV = [
 ];
 
 export function loadConfig() {
-    const missingKeys = REQUIRED_ENV.filter((key) => !process.env[key] || !process.env[key]?.trim());
+    // 端口配置（仍然必填且需要合法）
+    const port = Number.parseInt(process.env.PORT ?? '3070', 10);
 
-    if (missingKeys.length > 0) {
-        const formatted = missingKeys.join(', ');
-        throw new Error(`缺少必要的环境变量：${formatted}`);
+    if (!Number.isFinite(port) || port <= 0) {
+        throw new Error('PORT 必须是大于 0 的数字');
     }
 
     const baseUrlEnv = process.env.SILLYTAVERN_BASE_URL ?? '';
     const adminHandleEnv = process.env.SILLYTAVERN_ADMIN_HANDLE ?? '';
     const adminPasswordEnv = process.env.SILLYTAVERN_ADMIN_PASSWORD ?? '';
 
+    // 兼容旧版本：如果配置了 SILLYTAVERN_BASE_URL，则继续解析；否则改为可选
+    let baseUrl;
     const rawBaseUrl = baseUrlEnv.trim();
-    let parsedBaseUrl;
-    try {
-        parsedBaseUrl = new URL(rawBaseUrl);
-    } catch (error) {
-        throw new Error('SILLYTAVERN_BASE_URL 必须是包含协议的完整网址，例如 https://example.com:8000');
-    }
-
-    const baseUrl = parsedBaseUrl.toString().replace(/\/$/, '');
-    const port = Number.parseInt(process.env.PORT ?? '3070', 10);
-
-    if (!Number.isFinite(port) || port <= 0) {
-        throw new Error('PORT 必须是大于 0 的数字');
+    if (rawBaseUrl) {
+        let parsedBaseUrl;
+        try {
+            parsedBaseUrl = new URL(rawBaseUrl);
+        } catch (error) {
+            throw new Error('SILLYTAVERN_BASE_URL 必须是包含协议的完整网址，例如 https://example.com:8000');
+        }
+        baseUrl = parsedBaseUrl.toString().replace(/\/$/, '');
+    } else {
+        // 未配置时，仅用于 OAuth 默认回调地址；不再强制要求全局 SillyTavern 服务器
+        baseUrl = `http://localhost:${port}`;
     }
 
     const listenHostEnv = process.env.LISTEN_HOST ?? process.env.HOST ?? '0.0.0.0';
