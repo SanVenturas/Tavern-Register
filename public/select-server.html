@@ -83,29 +83,6 @@
             cursor: pointer;
             font-weight: 600;
         }
-        .ping-value {
-            padding: 0.15rem 0.5rem;
-            border-radius: 999px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            background: rgba(148, 163, 184, 0.18);
-            color: #e5e7eb;
-        }
-        .ping-good {
-            background: rgba(34, 197, 94, 0.18);
-            color: #4ade80;
-        }
-        .ping-medium {
-            background: rgba(234, 179, 8, 0.18);
-            color: #facc15;
-        }
-        .ping-bad {
-            background: rgba(248, 113, 113, 0.18);
-            color: #fca5a5;
-        }
-        .ping-label {
-            opacity: 0.8;
-        }
     </style>
 </head>
 <body>
@@ -187,7 +164,6 @@
                                 ${maintainerText ? `<span>${maintainerText}</span>` : ''}
                                 ${contactText ? `<span>${contactText}</span>` : ''}
                                 ${registeredText ? `<span>${registeredText}</span>` : ''}
-                                <span><span class="ping-label">延迟：</span><span id="ping-${server.id}" class="ping-value">测试中...</span></span>
                             </div>
                             ${server.announcement ? `
                             <div class="server-announcement">
@@ -198,83 +174,12 @@
                     </div>
                 `}).join('');
 
-                // 渲染后异步测试每个服务器的延迟
-                data.servers.forEach((server) => {
-                    const pingElement = document.getElementById(`ping-${server.id}`);
-                    if (!pingElement) return;
-
-                    pingElement.textContent = '测试中...';
-                    pingElement.classList.remove('ping-good', 'ping-medium', 'ping-bad');
-
-                    measurePing(server.url)
-                        .then((latency) => {
-                            // latency 为 null / Infinity 代表无法可靠测量
-                            if (!Number.isFinite(latency) || latency <= 0) {
-                                pingElement.textContent = '检测失败';
-                                pingElement.classList.add('ping-bad');
-                                return;
-                            }
-
-                            const rounded = Math.round(latency);
-                            pingElement.textContent = `${rounded} ms`;
-
-                            if (rounded <= 80) {
-                                pingElement.classList.add('ping-good');
-                            } else if (rounded <= 160) {
-                                pingElement.classList.add('ping-medium');
-                            } else {
-                                pingElement.classList.add('ping-bad');
-                            }
-                        })
-                        .catch(() => {
-                            pingElement.textContent = '检测失败';
-                            pingElement.classList.add('ping-bad');
-                        });
-                });
-
             } catch (error) {
                 loading.style.display = 'none';
                 status.textContent = '加载服务器列表失败';
                 status.className = 'status-error';
             }
         });
-
-        /**
-         * 从浏览器端测量当前客户端到目标服务器的相对延迟
-         * 通过多次 GET 根路径（no-cors）取平均值，只用于比较哪个更快
-         */
-        async function measurePing(baseUrl, attempts = 3, timeout = 1500) {
-            const samples = [];
-            const sanitizedBase = (baseUrl || '').replace(/\/+$/, '');
-
-            for (let i = 0; i < attempts; i++) {
-                const start = performance.now();
-                const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), timeout);
-
-                try {
-                    // 使用 no-cors 模式，避免 CORS 阻止；不关心响应内容，只关心耗时
-                    await fetch(`${sanitizedBase}/?tr=${Date.now()}&i=${i}`, {
-                        method: 'GET',
-                        mode: 'no-cors',
-                        cache: 'no-store',
-                        signal: controller.signal,
-                    });
-                    const duration = performance.now() - start;
-                    samples.push(duration);
-                } catch (_err) {
-                    // 网络错误 / 被浏览器阻止，视为一次失败
-                    // 不直接推入 timeout，留给后面整体判断
-                } finally {
-                    clearTimeout(id);
-                }
-            }
-
-            // 如果所有尝试都失败，就返回 Infinity，让上层显示“检测失败”
-            if (!samples.length) return Number.POSITIVE_INFINITY;
-            const sum = samples.reduce((a, b) => a + b, 0);
-            return sum / samples.length;
-        }
 
         async function handleServerClick(serverId, serverName) {
             const status = document.getElementById('status');
