@@ -51,8 +51,109 @@ http://localhost:3070/
 
 有关生产部署（systemd / pm2 / Nginx 反向代理）请参阅上文的“服务器部署”小节，其中包含 systemd 单元示例、pm2 启动方法以及 Nginx 配置片段。
 
+第三方 OAuth 登录配置
+----
 
+本项目支持通过 **GitHub / Discord / Linux.do** 进行一键注册，所有第三方登录均基于 OAuth2 标准协议实现。  
+如果你不需要第三方登录，可以完全忽略本节内容。
 
+### 1. 基础概念与回调地址
+
+- **REGISTER_BASE_URL**：
+  - 该地址用于生成 OAuth 回调地址（`redirect_uri`）。
+  - 未配置时，默认值为：`http://localhost:3070`
+  - 线上部署时，**强烈建议**设置为你的实际访问域名，例如：
+    - `https://register.example.com`
+    - `https://your-domain.com/tavern-register`
+
+回调地址的规则如下（请在第三方平台的“回调 URL / Redirect URI”中填写）：
+
+- **GitHub**：`{REGISTER_BASE_URL}/oauth/callback/github`
+- **Discord**：`{REGISTER_BASE_URL}/oauth/callback/discord`
+- **Linux.do**：`{REGISTER_BASE_URL}/oauth/callback/linuxdo`
+
+例如：如果 `REGISTER_BASE_URL=https://register.example.com`，则：
+
+- GitHub 回调：`https://register.example.com/oauth/callback/github`
+- Discord 回调：`https://register.example.com/oauth/callback/discord`
+- Linux.do 回调：`https://register.example.com/oauth/callback/linuxdo`
+
+### 2. GitHub OAuth 配置
+
+1. 访问 GitHub 的开发者设置页面，新建 OAuth App：
+   - Homepage URL：填写你的 `REGISTER_BASE_URL`
+   - Authorization callback URL：填写 `REGISTER_BASE_URL` 对应的 GitHub 回调地址
+2. 创建完成后，记录下生成的 `Client ID` 与 `Client Secret`。
+3. 在 `.env` 中添加：
+   ```env
+   # 启用 GitHub OAuth
+   ENABLE_GITHUB_OAUTH=true
+
+   # GitHub OAuth 凭据
+   GITHUB_CLIENT_ID=your_github_client_id
+   GITHUB_CLIENT_SECRET=your_github_client_secret
+
+   # 用于生成回调地址的基础 URL（强烈建议在生产环境手动设置为外网可访问的地址）
+   REGISTER_BASE_URL=https://your-register-domain.example.com
+   ```
+4. 重启 TavernRegister 服务后，前端将显示“GitHub 一键注册”按钮。
+
+### 3. Discord OAuth 配置
+
+1. 前往 Discord Developer Portal，新建应用并添加 OAuth2：
+   - 在 “Redirects / 回调 URL” 中添加：`{REGISTER_BASE_URL}/oauth/callback/discord`
+   - 在 “Scopes” 中至少勾选：`identify`
+2. 获取应用的 `Client ID` 和 `Client Secret`。
+3. 在 `.env` 中添加：
+   ```env
+   # 启用 Discord OAuth
+   ENABLE_DISCORD_OAUTH=true
+
+   # Discord OAuth 凭据
+   DISCORD_CLIENT_ID=your_discord_client_id
+   DISCORD_CLIENT_SECRET=your_discord_client_secret
+
+   # 基础 URL，同上
+   REGISTER_BASE_URL=https://your-register-domain.example.com
+   ```
+4. 重启服务后，前端将显示“Discord 一键注册”按钮。
+
+### 4. Linux.do OAuth 配置
+
+Linux.do 默认使用 `https://connect.linux.do` 作为 OAuth 端点，本项目已内置该地址；也支持手动覆盖为自建或未来可能变更的端点。
+
+1. 在 Linux.do（或对应的 OAuth 提供站点）申请 OAuth 客户端，获取：
+   - Client ID
+   - Client Secret
+2. 在 `.env` 中添加：
+   ```env
+   # 启用 Linux.do OAuth
+   ENABLE_LINUXDO_OAUTH=true
+
+   # Linux.do OAuth 凭据
+   LINUXDO_CLIENT_ID=your_linuxdo_client_id
+   LINUXDO_CLIENT_SECRET=your_linuxdo_client_secret
+
+   # 默认端点，如果官方有变更或你使用自建网关，可手动覆盖
+   # LINUXDO_AUTH_URL=https://connect.linux.do/oauth2/authorize
+   # LINUXDO_TOKEN_URL=https://connect.linux.do/oauth2/token
+   # LINUXDO_USERINFO_URL=https://connect.linux.do/api/user
+
+   # 基础 URL，同上
+   REGISTER_BASE_URL=https://your-register-domain.example.com
+   ```
+3. 配置完成并重启服务后，前端将显示“Linux.do 一键注册”按钮。
+
+### 5. 常见问题（第三方登录）
+
+- **Q: 前端看不到第三方登录按钮？**  
+  - 请确认 `.env` 中已设置对应的 `ENABLE_xxx_OAUTH=true`，并且已重启服务。
+
+- **Q: 点击登录后跳转报错，显示“redirect_uri 不合法 / 未配置”？**  
+  - 检查第三方平台中配置的回调地址是否与 `{REGISTER_BASE_URL}/oauth/callback/{provider}` 完全一致（含协议、端口、路径）。
+
+- **Q: 登录成功但创建 Tavern 用户失败？**  
+  - 检查后台 SillyTavern 管理员账号配置是否正确（`SILLYTAVERN_ADMIN_HANDLE` / `SILLYTAVERN_ADMIN_PASSWORD` / `SILLYTAVERN_BASE_URL`），并确认接口 `/api/users/create` 可由服务端正常访问。
 
 
 管理员面板
