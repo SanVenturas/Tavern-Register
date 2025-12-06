@@ -19,6 +19,7 @@ TavernRegister 是一个极简的独立注册门户，可在不修改 SillyTaver
 本项目包含平台对应的启动脚本，优先使用仓库自带脚本来安装依赖并启动服务，脚本已包含常见检查并能简化部署流程。
 ### 命令行安装
 ```bash
+cp .env.example .env
 git clone https://github.com/zhaiiker/Tavern-Register.git
 cd Tavern-Register
 npm install
@@ -50,6 +51,51 @@ chmod +x start.sh
 http://localhost:3070/
 
 有关生产部署（systemd / pm2 / Nginx 反向代理）请参阅上文的“服务器部署”小节，其中包含 systemd 单元示例、pm2 启动方法以及 Nginx 配置片段。
+
+配置说明
+----
+
+项目所有的可配置项均在 `.env` 文件中。首次使用请将根目录下的 `.env.example` 文件复制并重命名为 `.env`，然后根据需要修改配置。
+
+### 基础服务配置
+
+```env
+# 服务监听端口
+PORT=3070
+
+# 注册页面的外部访问 URL
+# 用于 OAuth 回调生成。若不填则默认使用 IP+端口。
+# 生产环境强烈建议填写实际域名，例如：https://register.example.com
+REGISTER_BASE_URL=https://register.example.com
+
+# Session 加密密钥
+# 建议修改为随机的长字符串以提高安全性
+SESSION_SECRET=1c3561585f573c24596d81af7dbc1c2a6e085378b9eb4a3fb4bdbd096dacf7b6
+```
+
+### 管理员与安全配置（可选）
+
+```env
+# 管理员面板登录密码
+ADMIN_PANEL_PASSWORD=admin123
+
+# 是否开启邀请码验证 (true/false)
+# 开启后用户注册必须提供有效邀请码
+REQUIRE_INVITE_CODE=false
+
+# 管理员登录页面路径
+# 建议修改此路径以防止暴力破解扫描，例如：/my-secret-login
+ADMIN_LOGIN_PATH=/admin/login
+
+# 管理员面板路径
+ADMIN_PANEL_PATH=/admin
+
+# 管理员登录最大重试次数
+MAX_LOGIN_ATTEMPTS=5
+
+# 登录失败后的锁定时间（分钟）
+LOGIN_LOCKOUT_TIME=15
+```
 
 第三方 OAuth 登录配置
 ----
