@@ -1036,34 +1036,60 @@ async function deleteCodesWithProgress(codesToDelete) {
 }
 
 // 编辑服务器
-function editServer(id) {
-    // 兼容后端可能返回字符串或数字类型的 id
-    const server = window.currentServers && window.currentServers.find(s => Number(s.id) === Number(id));
-    if (!server) return;
-
+async function editServer(id) {
     const form = document.getElementById('edit-server-form');
     if (!form) return;
 
-    // 填充表单
-    form.elements['id'].value = server.id;
-    form.elements['name'].value = server.name;
-    form.elements['url'].value = server.url;
-    form.elements['admin_username'].value = server.admin_username;
-    form.elements['admin_password'].value = ''; // 不显示密码，只有在修改时才填写
-    form.elements['description'].value = server.description || '';
-    form.elements['provider'].value = server.provider || '';
-    form.elements['maintainer'].value = server.maintainer || '';
-    form.elements['contact'].value = server.contact || '';
-    form.elements['announcement'].value = server.announcement || '';
-    // 设置注册暂停状态（如果有复选框）
-    const registrationPausedInput = form.elements['registrationPaused'];
-    if (registrationPausedInput) {
-        registrationPausedInput.checked = server.registrationPaused === true;
-    }
-
-    // 显示模态框
+    // 显示加载状态
+    setStatus('正在加载服务器信息...', false);
     const modal = document.getElementById('edit-server-modal');
     if (modal) modal.classList.add('active');
+
+    try {
+        // 从 API 获取完整的服务器信息（包括管理员账号密码）
+        const response = await fetch(`/api/admin/servers/${id}`, {
+            headers: { accept: 'application/json' },
+        });
+
+        if (!response.ok) {
+            const result = await response.json();
+            setStatus(result.message || '获取服务器信息失败', true);
+            if (modal) modal.classList.remove('active');
+            return;
+        }
+
+        const result = await response.json();
+        if (!result.success || !result.server) {
+            setStatus('获取服务器信息失败', true);
+            if (modal) modal.classList.remove('active');
+            return;
+        }
+
+        const server = result.server;
+
+        // 填充表单
+        form.elements['id'].value = server.id;
+        form.elements['name'].value = server.name || '';
+        form.elements['url'].value = server.url || '';
+        form.elements['admin_username'].value = server.admin_username || '';
+        form.elements['admin_password'].value = ''; // 不显示密码，只有在修改时才填写
+        form.elements['description'].value = server.description || '';
+        form.elements['provider'].value = server.provider || '';
+        form.elements['maintainer'].value = server.maintainer || '';
+        form.elements['contact'].value = server.contact || '';
+        form.elements['announcement'].value = server.announcement || '';
+        
+        // 设置注册暂停状态（如果有复选框）
+        const registrationPausedInput = form.elements['registrationPaused'];
+        if (registrationPausedInput) {
+            registrationPausedInput.checked = server.registrationPaused === true;
+        }
+
+        setStatus(''); // 清除加载状态
+    } catch (error) {
+        setStatus('获取服务器信息失败：' + (error.message || '网络错误'), true);
+        if (modal) modal.classList.remove('active');
+    }
 }
 
 function closeEditModal() {

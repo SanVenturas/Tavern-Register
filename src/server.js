@@ -866,19 +866,61 @@ app.post('/api/admin/servers', requireAdminAuth(config), async (req, res) => {
     }
 });
 
+// 获取单个服务器详细信息（用于编辑，包含敏感信息）
+app.get('/api/admin/servers/:id', requireAdminAuth(config), (req, res) => {
+    try {
+        const { id } = req.params;
+        const server = DataStore.getServerById(id);
+        
+        if (!server) {
+            return res.status(404).json({ success: false, message: '服务器不存在' });
+        }
+        
+        // 返回完整信息（包括管理员账号密码，仅管理员可见）
+        res.json({ success: true, server });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 // 更新服务器
 app.put('/api/admin/servers/:id', requireAdminAuth(config), async (req, res) => {
     try {
         const { id } = req.params;
         const { name, url, admin_username, admin_password, isActive, registrationPaused } = req.body;
         
+        const server = DataStore.getServerById(id);
+        if (!server) {
+            return res.status(404).json({ success: false, message: '服务器不存在' });
+        }
+        
+        // 构建更新对象，只包含提供的字段
+        const updates = {};
+        if (name !== undefined) updates.name = name;
+        if (url !== undefined) updates.url = url;
+        if (admin_username !== undefined && admin_username !== null && admin_username !== '') {
+            updates.admin_username = admin_username;
+        }
+        // 密码：如果提供了新密码，则更新；如果为空字符串或未提供，则保留原密码
+        if (admin_password !== undefined && admin_password !== null && admin_password !== '') {
+            updates.admin_password = admin_password;
+        }
+        if (isActive !== undefined) updates.isActive = isActive;
+        if (registrationPaused !== undefined) updates.registrationPaused = registrationPaused;
+        
+        // 如果更新了其他字段，也需要包含
+        if (req.body.description !== undefined) updates.description = req.body.description;
+        if (req.body.provider !== undefined) updates.provider = req.body.provider;
+        if (req.body.maintainer !== undefined) updates.maintainer = req.body.maintainer;
+        if (req.body.contact !== undefined) updates.contact = req.body.contact;
+        if (req.body.announcement !== undefined) updates.announcement = req.body.announcement;
+        
         // 如果更改了连接信息，验证连接
-        if (url || admin_username || admin_password) {
-            const server = DataStore.getServerById(id);
+        if (updates.url || updates.admin_username || updates.admin_password) {
             const tempClient = new SillyTavernClient({
-                baseUrl: url || server.url,
-                adminHandle: admin_username || server.admin_username,
-                adminPassword: admin_password || server.admin_password
+                baseUrl: updates.url || server.url,
+                adminHandle: updates.admin_username || server.admin_username,
+                adminPassword: updates.admin_password || server.admin_password
             });
             const testResult = await tempClient.testConnection();
             if (!testResult.success) {
@@ -886,7 +928,7 @@ app.put('/api/admin/servers/:id', requireAdminAuth(config), async (req, res) => 
             }
         }
 
-        const updatedServer = DataStore.updateServer(id, req.body);
+        const updatedServer = DataStore.updateServer(id, updates);
         res.json({ success: true, server: updatedServer });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
