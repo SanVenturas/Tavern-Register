@@ -110,6 +110,7 @@ export class DataStore {
             announcement: serverInfo.announcement || '',  // 公告
             createdAt: new Date().toISOString(),
             isActive: true,
+            registrationPaused: false,                     // 是否暂停注册
         };
         servers.push(newServer);
         writeJsonFile(SERVERS_FILE, servers);
@@ -120,7 +121,12 @@ export class DataStore {
      * 获取所有服务器
      */
     static getServers() {
-        return readJsonFile(SERVERS_FILE, []);
+        const servers = readJsonFile(SERVERS_FILE, []);
+        // 兼容旧数据：为没有 registrationPaused 字段的服务器设置默认值
+        return servers.map(s => ({
+            ...s,
+            registrationPaused: s.registrationPaused === true,
+        }));
     }
 
     /**
@@ -128,7 +134,11 @@ export class DataStore {
      */
     static getActiveServers() {
         const servers = readJsonFile(SERVERS_FILE, []);
-        return servers.filter(s => s.isActive);
+        // 兼容旧数据：为没有 registrationPaused 字段的服务器设置默认值
+        return servers.filter(s => s.isActive).map(s => ({
+            ...s,
+            registrationPaused: s.registrationPaused === true,
+        }));
     }
 
     /**
@@ -137,7 +147,12 @@ export class DataStore {
     static getServerById(id) {
         const servers = readJsonFile(SERVERS_FILE, []);
         const targetId = Number(id);
-        return servers.find(s => Number(s.id) === targetId);
+        const server = servers.find(s => Number(s.id) === targetId);
+        // 兼容旧数据：为没有 registrationPaused 字段的服务器设置默认值
+        return server ? {
+            ...server,
+            registrationPaused: server.registrationPaused === true,
+        } : null;
     }
 
     /**

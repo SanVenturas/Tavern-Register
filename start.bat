@@ -9,7 +9,7 @@ echo ========================================
 echo.
 
 :: 检查 Node.js
-echo [1/6] 检查 Node.js...
+echo [1/5] 检查 Node.js...
 where node >nul 2>&1
 if errorlevel 1 (
     echo [错误] 未检测到 Node.js
@@ -42,7 +42,7 @@ echo [✓] Node.js 版本: !NODE_VERSION!
 echo.
 
 :: 检查 npm
-echo [2/6] 检查 npm...
+echo [2/5] 检查 npm...
 where npm >nul 2>&1
 if errorlevel 1 (
     echo [错误] 未检测到 npm
@@ -76,7 +76,7 @@ if "!NPM_VERSION!"=="" (
 echo.
 
 :: 检查 .env 文件
-echo [3/6] 检查配置文件...
+echo [3/5] 检查配置文件...
 if not exist ".env" (
     echo [错误] 找不到 .env 配置文件
     echo.
@@ -98,59 +98,12 @@ if not exist ".env" (
 echo [✓] 配置文件已找到
 echo.
 
-:: 检查关键环境变量
-echo [4/6] 验证配置...
-set MISSING_CONFIG=0
-
-findstr /C:"SILLYTAVERN_BASE_URL=" .env >nul 2>&1
-if errorlevel 1 (
-    echo [错误] .env 文件中缺少 SILLYTAVERN_BASE_URL
-    set MISSING_CONFIG=1
-)
-
-findstr /C:"SILLYTAVERN_ADMIN_HANDLE=" .env >nul 2>&1
-if errorlevel 1 (
-    echo [错误] .env 文件中缺少 SILLYTAVERN_ADMIN_HANDLE
-    set MISSING_CONFIG=1
-) else (
-    for /f "tokens=2 delims==" %%a in ('findstr /C:"SILLYTAVERN_ADMIN_HANDLE=" .env') do (
-        set ADMIN_HANDLE=%%a
-        if "!ADMIN_HANDLE!"=="" (
-            echo [错误] SILLYTAVERN_ADMIN_HANDLE 不能为空
-            set MISSING_CONFIG=1
-        )
-    )
-)
-
-findstr /C:"SILLYTAVERN_ADMIN_PASSWORD=" .env >nul 2>&1
-if errorlevel 1 (
-    echo [错误] .env 文件中缺少 SILLYTAVERN_ADMIN_PASSWORD
-    set MISSING_CONFIG=1
-) else (
-    for /f "tokens=2 delims==" %%a in ('findstr /C:"SILLYTAVERN_ADMIN_PASSWORD=" .env') do (
-        set ADMIN_PWD=%%a
-        if "!ADMIN_PWD!"=="" (
-            echo [错误] SILLYTAVERN_ADMIN_PASSWORD 不能为空
-            set MISSING_CONFIG=1
-        )
-    )
-)
-
-if %MISSING_CONFIG%==1 (
-    echo.
-    echo 请检查 .env 文件，确保以下配置已填写：
-    echo - SILLYTAVERN_BASE_URL
-    echo - SILLYTAVERN_ADMIN_HANDLE
-    echo - SILLYTAVERN_ADMIN_PASSWORD
-    echo.
-    pause
-    exit /b 1
-)
-echo [✓] 配置验证通过
+:: 配置验证（SILLYTAVERN 相关配置已在后台服务器管理中配置，不再需要在此检查）
+echo [✓] 配置验证通过（SillyTavern 服务器配置请在后台管理面板中添加）
 echo.
 
 :: 安装依赖
-echo [5/6] 检查依赖...
+echo [4/5] 检查依赖...
 if not exist "node_modules\" (
     echo 首次运行，正在安装依赖...
     echo.
@@ -184,7 +137,7 @@ if not exist "node_modules\" (
 echo.
 
 :: 创建数据目录
-echo [6/6] 准备数据目录...
+echo [5/5] 准备数据目录...
 if not exist "data\" (
     mkdir "data"
     echo [✓] 已创建 data 目录

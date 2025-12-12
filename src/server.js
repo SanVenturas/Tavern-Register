@@ -237,8 +237,21 @@ app.post('/register', async (req, res) => {
 // 获取可用服务器列表（给用户选服用）
 app.get('/api/servers/available', (req, res) => {
     try {
+        const handle = req.session.userHandle || req.session.pendingUserHandle;
+        const user = handle ? DataStore.getUserByHandle(handle) : null;
+        const userServerId = user && user.serverId ? Number(user.serverId) : null;
+        const isRegistered = user && user.registrationStatus === 'active';
+        
         const allUsers = DataStore.getUsers();
-        const servers = DataStore.getActiveServers().map(s => {
+        const allServers = DataStore.getActiveServers();
+        
+        // 对于已注册用户，显示所有服务器（包括暂停注册的），但标记暂停状态
+        // 对于未注册用户，只显示未暂停注册的服务器
+        const filteredServers = isRegistered 
+            ? allServers  // 已注册用户可以看到所有服务器
+            : allServers.filter(s => !s.registrationPaused);  // 未注册用户只能看到未暂停的服务器
+        
+        const servers = filteredServers.map(s => {
             // 兼容旧数据：旧用户记录里的 serverId 或 server.id 可能是字符串
             const serverNumericId = Number(s.id);
             const registeredUserCount = allUsers.filter(u => {
@@ -256,6 +269,7 @@ app.get('/api/servers/available', (req, res) => {
                 contact: s.contact || '',
                 announcement: s.announcement || '',
                 registeredUserCount,
+                registrationPaused: s.registrationPaused === true,  // 是否暂停注册
             };
         });
         res.json({ success: true, servers });
@@ -317,6 +331,11 @@ app.post('/api/users/bind-server', async (req, res) => {
         const server = DataStore.getServerById(serverId);
         if (!server || !server.isActive) {
             return res.status(404).json({ success: false, message: '服务器不存在或不可用' });
+        }
+
+        // 检查服务器是否暂停注册
+        if (server.registrationPaused === true) {
+            return res.status(403).json({ success: false, message: '该服务器已暂停注册，无法绑定新用户' });
         }
 
         // 初始化客户端连接目标服务器
@@ -792,6 +811,7 @@ app.get('/api/admin/servers', requireAdminAuth(config), (req, res) => {
                 ...safeServer,
                 id: serverNumericId,
                 registeredUserCount,
+                registrationPaused: s.registrationPaused === true,  // 确保返回布尔值，兼容旧数据
             };
         });
 
@@ -850,7 +870,7 @@ app.post('/api/admin/servers', requireAdminAuth(config), async (req, res) => {
 app.put('/api/admin/servers/:id', requireAdminAuth(config), async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, url, admin_username, admin_password, isActive } = req.body;
+        const { name, url, admin_username, admin_password, isActive, registrationPaused } = req.body;
         
         // 如果更改了连接信息，验证连接
         if (url || admin_username || admin_password) {

@@ -145,8 +145,9 @@
                 serverList.style.display = 'grid';
                 serverList.innerHTML = data.servers.map(server => {
                     const isBound = currentUser && currentUser.serverId === server.id;
+                    const isPaused = server.registrationPaused === true;
                     const activeClass = isBound ? 'selected' : '';
-                    const btnText = isBound ? '进入' : '选择';
+                    const btnText = isBound ? '进入' : (isPaused ? '已暂停注册' : '选择');
                     const providerText = server.provider ? `提供方：${server.provider}` : '';
                     const maintainerText = server.maintainer ? `维护者：${server.maintainer}` : '';
                     const contactText = server.contact ? `联系方式：${server.contact}` : '';
@@ -154,10 +155,11 @@
                         ? `已注册：${server.registeredUserCount} 人`
                         : '';
                     const hasMeta = providerText || maintainerText || contactText || registeredText;
+                    const canSelect = isBound || !isPaused;  // 已绑定或未暂停注册的可以操作
                     return `
-                    <div class="server-card ${activeClass}" onclick="handleServerClick(${server.id}, '${server.name}')">
+                    <div class="server-card ${activeClass} ${!canSelect ? 'disabled' : ''}" ${canSelect ? `onclick="handleServerClick(${server.id}, '${server.name}', ${isPaused})"` : ''} style="${!canSelect ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
                         <div class="server-info">
-                            <h3>${server.name} ${isBound ? '<span style="font-size:0.8em;color:#10b981">(已绑定)</span>' : ''}</h3>
+                            <h3>${server.name} ${isBound ? '<span style="font-size:0.8em;color:#10b981">(已绑定)</span>' : ''} ${isPaused && !isBound ? '<span style="font-size:0.8em;color:#ffc107">(暂停注册)</span>' : ''}</h3>
                             <p>${server.description || '暂无描述'}</p>
                             <div class="server-meta">
                                 ${providerText ? `<span>${providerText}</span>` : ''}
@@ -169,8 +171,12 @@
                             <div class="server-announcement">
                                 <strong>公告：</strong><span>${server.announcement}</span>
                             </div>` : ''}
+                            ${isPaused && !isBound ? `
+                            <div class="server-announcement" style="color: #ffc107; margin-top: 0.5rem;">
+                                <strong>提示：</strong><span>该服务器已暂停注册，无法绑定新用户</span>
+                            </div>` : ''}
                         </div>
-                        <button class="select-btn">${btnText}</button>
+                        <button class="select-btn" ${!canSelect ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>${btnText}</button>
                     </div>
                 `}).join('');
 
@@ -181,7 +187,7 @@
             }
         });
 
-        async function handleServerClick(serverId, serverName) {
+        async function handleServerClick(serverId, serverName, isPaused) {
             const status = document.getElementById('status');
             
             if (currentUser && currentUser.serverId) {
@@ -202,6 +208,12 @@
                     alert(`您已绑定到服务器 "${currentUser.serverName}"，无法切换到 "${serverName}"。`);
                     return;
                 }
+            }
+
+            // Check if registration is paused
+            if (isPaused) {
+                alert(`服务器 "${serverName}" 已暂停注册，无法绑定新用户。`);
+                return;
             }
 
             // Not bound, proceed to bind

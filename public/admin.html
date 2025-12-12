@@ -600,6 +600,7 @@
                                 <th>维护者</th>
                                 <th>已注册用户</th>
                                 <th>状态</th>
+                                <th>注册状态</th>
                                 <th>创建时间</th>
                                 <th>操作</th>
                             </tr>
@@ -734,6 +735,12 @@
                         <label class="field" style="grid-column: 1 / -1;">
                             <span>服务器公告（可选）</span>
                             <textarea name="announcement" rows="3" placeholder="例如：服务器维护时间、规则说明等" style="width: 100%; resize: vertical;"></textarea>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field" style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" name="registrationPaused" style="width: auto;">
+                            <span>暂停注册（暂停后新用户无法注册此服务器，但已注册用户可以继续使用）</span>
                         </label>
                     </div>
                     <div style="display: flex; gap: 1rem; justify-content: flex-end;">

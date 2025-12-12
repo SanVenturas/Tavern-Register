@@ -290,6 +290,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 delete data.admin_password;
             }
 
+            // 处理注册暂停状态（复选框）
+            data.registrationPaused = data.registrationPaused === 'on' || data.registrationPaused === true;
+
             try {
                 const response = await fetch(`/api/admin/servers/${id}`, {
                     method: 'PUT',
@@ -363,12 +366,21 @@ async function loadServers() {
                         ${server.isActive ? '在线' : '禁用'}
                     </span>
                 </td>
+                <td>
+                    <span class="badge ${server.registrationPaused ? 'badge-warning' : 'badge-success'}">
+                        ${server.registrationPaused ? '暂停注册' : '允许注册'}
+                    </span>
+                </td>
                 <td>${formatDate(server.createdAt)}</td>
                 <td>
                     <button class="action-btn btn-success" onclick="editServer(${server.id})" style="margin-right: 0.5rem; background: rgba(59, 130, 246, 0.2); color: #3b82f6; border-color: #3b82f6;">编辑</button>
                     ${server.isActive ? 
                         `<button class="action-btn btn-danger" onclick="toggleServer(${server.id}, false)">禁用</button>` :
                         `<button class="action-btn btn-success" onclick="toggleServer(${server.id}, true)">启用</button>`
+                    }
+                    ${server.registrationPaused ? 
+                        `<button class="action-btn btn-success" onclick="toggleRegistration(${server.id}, false)" style="margin-right: 0.5rem;">恢复注册</button>` :
+                        `<button class="action-btn btn-warning" onclick="toggleRegistration(${server.id}, true)" style="margin-right: 0.5rem; background: rgba(255, 193, 7, 0.2); color: #ffc107; border-color: #ffc107;">暂停注册</button>`
                     }
                     <button class="action-btn btn-danger" onclick="deleteServer(${server.id})">删除</button>
                 </td>
@@ -392,6 +404,28 @@ async function toggleServer(id, isActive) {
         if (response.ok) {
             loadServers();
             loadStats();
+        } else {
+            const data = await response.json();
+            setStatus(data.message || '操作失败', true);
+        }
+    } catch (error) {
+        setStatus('操作失败', true);
+    }
+}
+
+async function toggleRegistration(id, registrationPaused) {
+    if (!confirm(`确定要${registrationPaused ? '暂停' : '恢复'}该服务器的注册功能吗？${registrationPaused ? '暂停后新用户将无法注册此服务器，但已注册用户可以继续使用。' : ''}`)) return;
+
+    try {
+        const response = await fetch(`/api/admin/servers/${id}`, {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ registrationPaused })
+        });
+        
+        if (response.ok) {
+            loadServers();
+            setStatus(`服务器注册功能已${registrationPaused ? '暂停' : '恢复'}`, false);
         } else {
             const data = await response.json();
             setStatus(data.message || '操作失败', true);
@@ -1021,6 +1055,11 @@ function editServer(id) {
     form.elements['maintainer'].value = server.maintainer || '';
     form.elements['contact'].value = server.contact || '';
     form.elements['announcement'].value = server.announcement || '';
+    // 设置注册暂停状态（如果有复选框）
+    const registrationPausedInput = form.elements['registrationPaused'];
+    if (registrationPausedInput) {
+        registrationPausedInput.checked = server.registrationPaused === true;
+    }
 
     // 显示模态框
     const modal = document.getElementById('edit-server-modal');
