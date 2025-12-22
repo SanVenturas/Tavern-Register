@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>输入邀请码 - TavernRegister</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --accent-color: #667eea;
+            --text-color: #2d3748;
+            --success-color: #48bb78;
+            --error-color: #f56565;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .invite-wrapper {
+            width: 100%;
+            max-width: 480px;
+            animation: fadeIn 0.4s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .invite-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        }
+        
+        .invite-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .invite-header h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .invite-header p {
+            color: #718096;
+            font-size: 0.9375rem;
+            line-height: 1.6;
+        }
+        
+        .info-box {
+            background: #edf2f7;
+            border-left: 4px solid var(--accent-color);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .info-box p {
+            color: #4a5568;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .info-box p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .info-box strong {
+            color: var(--accent-color);
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-input {
+            width: 100%;
+            height: 50px;
+            padding: 0 1rem;
+            font-size: 1.125rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            background: white;
+            color: var(--text-color);
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+        
+        .form-input:hover {
+            border-color: #cbd5e0;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-input::placeholder {
+            color: #a0aec0;
+            letter-spacing: normal;
+            text-transform: none;
+        }
+        
+        .btn-submit {
+            width: 100%;
+            height: 50px;
+            background: var(--primary-gradient);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 0.5rem;
+        }
+        
+        .btn-submit:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.35);
+        }
+        
+        .btn-submit:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .status-message {
+            margin-top: 1rem;
+            padding: 0.875rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-align: center;
+        }
+        
+        .status-message:empty {
+            display: none;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .footer-link {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .footer-link a {
+            color: #718096;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.2s ease;
+        }
+        
+        .footer-link a:hover {
+            color: var(--accent-color);
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 480px) {
+            .invite-card {
+                padding: 2rem 1.5rem;
+            }
+            
+            .invite-header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .form-input,
+            .btn-submit {
+                height: 48px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="invite-wrapper">
+        <div class="invite-card">
+            <div class="invite-header">
+                <h1>输入邀请码</h1>
+                <p>登录成功！请输入邀请码完成注册</p>
+            </div>
+
+            <div class="info-box">
+                <p><strong>提示信息：</strong></p>
+                <p>• 需要有效的邀请码才能完成注册</p>
+                <p>• 邀请码不区分大小写</p>
+            </div>
+
+            <form id="invite-form" novalidate>
+                <div class="form-group">
+                    <label class="form-label">邀请码</label>
+                    <input 
+                        type="text" 
+                        name="inviteCode" 
+                        class="form-input"
+                        required 
+                        autocomplete="off"
+                        placeholder="请输入邀请码" 
+                        maxlength="32"
+                        id="invite-input">
+                </div>
+
+                <button type="submit" class="btn-submit" id="submit-btn">完成注册</button>
+            </form>
+
+            <div id="status" class="status-message" role="status" aria-live="polite"></div>
+            
+            <div class="footer-link">
+                <a href="/">← 返回注册页面</a>
+            </div>
+        </div>
+    </div>
+    <script>
+        function setStatus(message = '', isError = false) {
+            const statusElement = document.getElementById('status');
+            if (!statusElement) return;
+            statusElement.textContent = message;
+            statusElement.classList.toggle('status-error', isError);
+            statusElement.classList.toggle('status-success', !isError);
+        }
+
+        // 显示醒目的成功弹窗
+        function showSuccessModal(username, loginUrl) {
+            // 隐藏原页面内容
+            document.body.innerHTML = '';
+            
+            // 创建遮罩层
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.7);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                animation: fadeIn 0.3s ease-in-out;
+            `;
+            
+            // 创建弹窗
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 16px;
+                padding: 2.5rem;
+                max-width: 500px;
+                width: 90%;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+                text-align: center;
+                color: white;
+                animation: slideUp 0.4s ease-out;
+            `;
+            
+            modal.innerHTML = `
+                <div style="font-size: 4rem; margin-bottom: 1rem; animation: bounce 0.6s ease-in-out;">✅</div>
+                <h2 style="font-size: 1.75rem; font-weight: 700; margin: 0 0 1rem 0; color: white;">注册成功！</h2>
+                
+                <div style="background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px); border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;">
+                    <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 0.5rem;">您的用户名：</div>
+                    <div style="font-size: 2rem; font-weight: 700; font-family: 'Courier New', monospace; letter-spacing: 0.05em; color: #ffd700; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); word-break: break-all;">${username}</div>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, rgba(255, 59, 48, 0.95) 0%, rgba(255, 149, 0, 0.95) 100%); border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3); animation: pulse 2s ease-in-out infinite;">
+                    <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">⚠️</div>
+                    <div style="font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; color: white; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);">🔐 重要安全提示</div>
+                    <div style="background: rgba(255, 255, 255, 0.25); border: 2px dashed rgba(255, 255, 255, 0.6); border-radius: 10px; padding: 1.25rem; margin: 1rem 0;">
+                        <div style="font-size: 0.95rem; color: white; margin-bottom: 0.5rem; font-weight: 600;">您的默认密码为：</div>
+                        <div style="font-size: 2.5rem; font-weight: 900; font-family: 'Courier New', monospace; color: #FFEB3B; text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 235, 59, 0.5); letter-spacing: 0.15em; margin: 0.5rem 0;">123456</div>
+                    </div>
+                    <div style="font-size: 1.05rem; font-weight: 700; color: white; margin-top: 1rem; line-height: 1.6; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);">
+                        ⚡ 登录后第一件事：<br>请立即前往设置修改密码！
+                    </div>
+                </div>
+                
+                <div style="font-size: 0.9rem; opacity: 0.9; margin-top: 1.5rem; line-height: 1.6;">
+                    请牢记您的用户名，页面将在 10 秒后自动跳转到登录页面...
+                </div>
+            `;
+            
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            
+            // 添加CSS动画
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes slideUp {
+                    from {
+                        transform: translateY(30px);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateY(0);
+                        opacity: 1;
+                    }
+                }
+                @keyframes bounce {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.1); }
+                }
+                @keyframes pulse {
+                    0%, 100% { 
+                        transform: scale(1);
+                        box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
+                    }
+                    50% { 
+                        transform: scale(1.02);
+                        box-shadow: 0 12px 32px rgba(255, 59, 48, 0.5);
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // 10秒后跳转
+            setTimeout(() => {
+                window.location.href = loginUrl;
+            }, 10000);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('invite-form');
+            const inviteInput = document.getElementById('invite-input');
+            const submitBtn = document.getElementById('submit-btn');
+            
+            if (!form) return;
+
+            // 自动聚焦
+            if (inviteInput) {
+                setTimeout(() => inviteInput.focus(), 100);
+            }
+
+            // 自动转换为大写
+            if (inviteInput) {
+                inviteInput.addEventListener('input', (e) => {
+                    e.target.value = e.target.value.toUpperCase();
+                });
+            }
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                setStatus('');
+
+                const formData = new FormData(form);
+                const inviteCode = formData.get('inviteCode');
+
+                if (!inviteCode || !inviteCode.trim()) {
+                    setStatus('请输入邀请码', true);
+                    return;
+                }
+
+                // 设置加载状态
+                submitBtn.disabled = true;
+                submitBtn.textContent = '验证中...';
+                if (inviteInput) inviteInput.disabled = true;
+
+                try {
+                    const response = await fetch('/oauth/invite', {
+                        method: 'POST',
+                        headers: {
+                            'content-type': 'application/json',
+                            accept: 'application/json',
+                        },
+                        body: JSON.stringify({ inviteCode: inviteCode.trim().toUpperCase() }),
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.success) {
+                        // 检查是否是"已注册"的情况
+                        if (data.isAlreadyRegistered && data.loginUrl) {
+                            setStatus('您已经注册过了，正在跳转到登录页面...', false);
+                            setTimeout(() => {
+                                window.location.href = data.loginUrl;
+                            }, 2000);
+                            return;
+                        }
+                        
+                        setStatus(data.message || '邀请码验证失败', true);
+                        
+                        // 恢复状态
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = '完成注册';
+                        if (inviteInput) {
+                            inviteInput.disabled = false;
+                            inviteInput.value = '';
+                            inviteInput.focus();
+                        }
+                        return;
+                    }
+
+                    // 显示醒目的成功弹窗
+                    showSuccessModal(data.handle, data.loginUrl || '/login');
+                } catch (error) {
+                    setStatus('网络错误，请重试', true);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '完成注册';
+                    if (inviteInput) {
+                        inviteInput.disabled = false;
+                        inviteInput.focus();
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
