@@ -75,7 +75,7 @@ export class SillyTavernClient {
         }
     }
 
-    async registerUser({ handle, name, password, makeAdmin = false }) {
+    async registerUser({ handle, name, password, email, makeAdmin = false }) {
         if (!handle || !name) {
             throw new Error('用户标识和显示名称均为必填项');
         }
@@ -96,6 +96,11 @@ export class SillyTavernClient {
 
         if (password) {
             payload.password = password;
+        }
+
+        // 添加邮箱到 payload（SillyTavern 可能会存储到用户配置中）
+        if (email) {
+            payload.email = email.trim().toLowerCase();
         }
 
         if (makeAdmin) {
@@ -131,6 +136,7 @@ export class SillyTavernClient {
         return {
             handle: data.handle,
             name: payload.name,
+            email: payload.email,
         };
     }
 

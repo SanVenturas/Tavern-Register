@@ -11,10 +11,14 @@ import { DataStore } from './dataStore.js';
 import { InviteCodeService } from './inviteCodeService.js';
 import { requireAdminAuth, verifyAdminPassword } from './adminAuth.js';
 import LoginLimiter from './loginLimiter.js';
+import { EmailService, cleanupVerificationCodes } from './emailService.js';
 
 const config = loadConfig();
 // const client = new SillyTavernClient(config); //不再使用全局客户端
 const oauthService = new OAuthService(config);
+
+// 初始化邮箱服务
+const emailService = new EmailService(config);
 
 // 初始化登录限制器
 const loginLimiter = new LoginLimiter(config.maxLoginAttempts, config.loginLockoutTime);
@@ -22,6 +26,7 @@ const loginLimiter = new LoginLimiter(config.maxLoginAttempts, config.loginLocko
 // 定期清理过期记录（每小时）
 setInterval(() => {
     loginLimiter.cleanup();
+    cleanupVerificationCodes(); // 清理过期验证码
 }, 60 * 60 * 1000);
 
 const app = express();
@@ -83,7 +88,51 @@ app.get('/health', (_req, res) => {
 app.get('/api/config', (_req, res) => {
     res.json({
         requireInviteCode: config.requireInviteCode || false,
+        requireEmailVerification: config.requireEmailVerification || false,
+        enableIpLimit: config.enableIpLimit || false,
     });
+});
+
+// 发送邮箱验证码
+app.post('/api/email/send-code', async (req, res) => {
+    try {
+        const { email } = req.body;
+        
+        if (!email || typeof email !== 'string') {
+            return res.status(400).json({
+                success: false,
+                message: '邮箱地址不能为空',
+            });
+        }
+        
+        // 验证邮箱格式
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+            return res.status(400).json({
+                success: false,
+                message: '邮箱格式不正确',
+            });
+        }
+        
+        // 检查邮箱是否已被注册
+        if (DataStore.isEmailUsed(email)) {
+            return res.status(409).json({
+                success: false,
+                message: '该邮箱已被注册，请使用其他邮箱或直接登录',
+            });
+        }
+        
+        // 发送验证码
+        const result = await emailService.sendVerificationCode(email.trim());
+        res.json(result);
+        
+    } catch (error) {
+        console.error('发送验证码失败:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || '发送验证码失败，请稍后重试',
+        });
+    }
 });
 
 function sendRegisterPage(res) {
@@ -151,11 +200,25 @@ app.get('/select-server', (req, res) => {
 
 app.post('/register', async (req, res) => {
     try {
-        const { handle, name, password, inviteCode } = sanitizeInput(req.body ?? {});
+        const { handle, name, password, inviteCode, email, emailCode } = sanitizeInput(req.body ?? {});
         
         // 标准化用户名
         const tempClient = new SillyTavernClient({}); // 仅用于 normalizeHandle
         const normalizedHandle = tempClient.normalizeHandle(handle);
+        
+        // 获取客户端 IP
+        const forwardedFor = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : '';
+        const clientIp = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+        
+        // IP 注册限制检查
+        if (config.enableIpLimit) {
+            if (DataStore.hasIpRegistered(clientIp)) {
+                return res.status(403).json({
+                    success: false,
+                    message: '您的 IP 地址已注册过账号，每个 IP 只能注册一次',
+                });
+            }
+        }
         
         // 本地重复检查 - 提供更友好的提示
         const existingUser = DataStore.getUserByHandle(normalizedHandle);
@@ -170,6 +233,52 @@ app.post('/register', async (req, res) => {
                 success: false,
                 message: `该用户名已被注册（注册方式：${methodText}，注册时间：${new Date(existingUser.registeredAt).toLocaleString('zh-CN')}）`,
             });
+        }
+        
+        // 邮箱验证
+        let verifiedEmail = null;
+        if (config.requireEmailVerification) {
+            if (!email || typeof email !== 'string' || !email.trim()) {
+                return res.status(400).json({
+                    success: false,
+                    message: '邮箱地址不能为空',
+                });
+            }
+            
+            // 验证邮箱格式
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email.trim())) {
+                return res.status(400).json({
+                    success: false,
+                    message: '邮箱格式不正确',
+                });
+            }
+            
+            // 检查邮箱是否已被使用
+            if (DataStore.isEmailUsed(email)) {
+                return res.status(409).json({
+                    success: false,
+                    message: '该邮箱已被注册，请使用其他邮箱或直接登录',
+                });
+            }
+            
+            // 验证邮箱验证码
+            if (!emailCode || typeof emailCode !== 'string' || !emailCode.trim()) {
+                return res.status(400).json({
+                    success: false,
+                    message: '邮箱验证码不能为空',
+                });
+            }
+            
+            const verification = emailService.verifyCode(email.trim(), emailCode.trim());
+            if (!verification.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: verification.message || '验证码无效',
+                });
+            }
+            
+            verifiedEmail = email.trim().toLowerCase();
         }
         
         // 如果启用了邀请码，验证邀请码
@@ -194,14 +303,12 @@ app.post('/register', async (req, res) => {
         const finalPassword = password || oauthService.getDefaultPassword();
         
         // 仅在本地创建用户记录，标记为 pending_selection
-        const forwardedFor = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : '';
-        const clientIp = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-        
         const newUser = DataStore.recordUser({
             handle: normalizedHandle,
             name: name.trim(),
             password: finalPassword, // 暂时存储密码，用于后续绑定服务器时使用
             ip: clientIp,
+            email: verifiedEmail, // 存储验证后的邮箱
             inviteCode: inviteCode ? inviteCode.trim().toUpperCase() : null,
             registrationMethod: 'manual',
             registrationStatus: 'pending_selection'
@@ -213,7 +320,7 @@ app.post('/register', async (req, res) => {
         }
 
         const timestamp = new Date().toISOString();
-        console.info(`[注册审计] 时间 ${timestamp}，IP ${clientIp}，用户名 ${newUser.handle}，本地创建成功，等待选服`);
+        console.info(`[注册审计] 时间 ${timestamp}，IP ${clientIp}，用户名 ${newUser.handle}，邮箱 ${verifiedEmail || '无'}，本地创建成功，等待选服`);
 
         // 设置 session，用于后续选服
         req.session.pendingUserHandle = newUser.handle;
@@ -345,11 +452,12 @@ app.post('/api/users/bind-server', async (req, res) => {
             adminPassword: server.admin_password
         });
 
-        // 远程注册
+        // 远程注册（包含邮箱信息）
         await client.registerUser({
             handle: user.handle,
             name: user.name,
-            password: user.password // 使用之前暂存的密码
+            password: user.password, // 使用之前暂存的密码
+            email: user.email // 将邮箱上传到酒馆
         });
 
         // 更新本地状态
@@ -470,6 +578,10 @@ app.get('/oauth/callback/:provider', async (req, res) => {
         const handle = tempClient.normalizeHandle(userInfo.username || userInfo.id);
         const displayName = userInfo.displayName || userInfo.username || `用户_${userInfo.id.slice(0, 8)}`;
 
+        // 获取客户端 IP（用于 IP 限制检查）
+        const forwardedFor = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : '';
+        const clientIp = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+
         // 无论当前是否需要邀请码，都先检查本地是否已存在该用户
         const existingUser = DataStore.getUserByHandle(handle);
         if (existingUser) {
@@ -484,13 +596,35 @@ app.get('/oauth/callback/:provider', async (req, res) => {
             return res.redirect('/select-server');
         }
         
-        // 如果启用了邀请码，跳转到邀请码验证页面（首次注册才会到这里）
-        if (config.requireInviteCode) {
+        // IP 注册限制检查（新用户才检查）
+        if (config.enableIpLimit) {
+            if (DataStore.hasIpRegistered(clientIp)) {
+                // 清除 OAuth 状态
+                delete req.session.oauthState;
+                delete req.session.oauthProvider;
+                delete req.session.oauthBaseUrl;
+                
+                return res.status(403).send(`
+                    <html>
+                        <head><title>注册限制</title></head>
+                        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+                            <h1>⚠️ 注册受限</h1>
+                            <p>您的 IP 地址已注册过账号，每个 IP 只能注册一次。</p>
+                            <a href="/login" style="color: #667eea;">返回登录</a>
+                        </body>
+                    </html>
+                `);
+            }
+        }
+        
+        // 如果启用了邀请码或邮箱验证，跳转到验证页面（首次注册才会到这里）
+        if (config.requireInviteCode || config.requireEmailVerification) {
             // 将用户信息存入 session
             req.session.oauthPendingUser = {
                 handle,
                 displayName,
                 provider,
+                ip: clientIp,
             };
             
             // 清除 OAuth 状态
@@ -498,21 +632,19 @@ app.get('/oauth/callback/:provider', async (req, res) => {
             delete req.session.oauthProvider;
             delete req.session.oauthBaseUrl;
             
-            // 跳转到邀请码验证页面
+            // 跳转到验证页面（邀请码 + 邮箱验证）
             return res.redirect('/oauth/invite');
         }
         
         // 创建新用户 (本地)
         const defaultPassword = oauthService.getDefaultPassword();
         
-        const forwardedFor = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : '';
-        const clientIp = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-        
         const newUser = DataStore.recordUser({
             handle: handle,
             name: displayName,
             password: defaultPassword,
             ip: clientIp,
+            email: null, // OAuth 流程不强制要求邮箱
             inviteCode: null,
             registrationMethod: `oauth:${provider}`,
             registrationStatus: 'pending_selection'
@@ -553,7 +685,7 @@ app.get('/oauth/invite', (req, res) => {
     res.sendFile(path.join(publicDir, 'oauth-invite.html'));
 });
 
-// OAuth 邀请码验证 API
+// OAuth 邀请码/邮箱验证 API
 app.post('/oauth/invite', async (req, res) => {
     if (!req.session.oauthPendingUser) {
         return res.status(400).json({
@@ -562,26 +694,75 @@ app.post('/oauth/invite', async (req, res) => {
         });
     }
     
-    const { inviteCode } = req.body;
+    const { inviteCode, email, emailCode } = req.body;
     
-    if (!inviteCode || typeof inviteCode !== 'string' || !inviteCode.trim()) {
-        return res.status(400).json({
-            success: false,
-            message: '邀请码不能为空',
-        });
+    // 邮箱验证
+    let verifiedEmail = null;
+    if (config.requireEmailVerification) {
+        if (!email || typeof email !== 'string' || !email.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: '邮箱地址不能为空',
+            });
+        }
+        
+        // 验证邮箱格式
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+            return res.status(400).json({
+                success: false,
+                message: '邮箱格式不正确',
+            });
+        }
+        
+        // 检查邮箱是否已被使用
+        if (DataStore.isEmailUsed(email)) {
+            return res.status(409).json({
+                success: false,
+                message: '该邮箱已被注册，请使用其他邮箱或直接登录',
+            });
+        }
+        
+        // 验证邮箱验证码
+        if (!emailCode || typeof emailCode !== 'string' || !emailCode.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: '邮箱验证码不能为空',
+            });
+        }
+        
+        const verification = emailService.verifyCode(email.trim(), emailCode.trim());
+        if (!verification.valid) {
+            return res.status(400).json({
+                success: false,
+                message: verification.message || '验证码无效',
+            });
+        }
+        
+        verifiedEmail = email.trim().toLowerCase();
     }
     
-    // 验证邀请码
-    const validation = InviteCodeService.validate(inviteCode.trim().toUpperCase());
-    if (!validation.valid) {
-        return res.status(400).json({
-            success: false,
-            message: validation.message || '邀请码无效',
-        });
+    // 邀请码验证
+    if (config.requireInviteCode) {
+        if (!inviteCode || typeof inviteCode !== 'string' || !inviteCode.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: '邀请码不能为空',
+            });
+        }
+        
+        // 验证邀请码
+        const validation = InviteCodeService.validate(inviteCode.trim().toUpperCase());
+        if (!validation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: validation.message || '邀请码无效',
+            });
+        }
     }
     
     try {
-        const { handle, displayName, provider } = req.session.oauthPendingUser;
+        const { handle, displayName, provider, ip: storedIp } = req.session.oauthPendingUser;
         
         // 检查是否已注册
         const existingUser = DataStore.getUserByHandle(handle);
@@ -603,24 +784,28 @@ app.post('/oauth/invite', async (req, res) => {
         // 创建新用户 (本地)
         const defaultPassword = oauthService.getDefaultPassword();
         
+        // 使用存储的 IP 或从当前请求获取
         const forwardedFor = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : '';
-        const clientIp = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+        const clientIp = storedIp || forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
         
         const newUser = DataStore.recordUser({
             handle: handle,
             name: displayName,
             password: defaultPassword,
             ip: clientIp,
-            inviteCode: inviteCode.trim().toUpperCase(),
+            email: verifiedEmail, // 存储验证后的邮箱
+            inviteCode: inviteCode ? inviteCode.trim().toUpperCase() : null,
             registrationMethod: `oauth:${provider}`,
             registrationStatus: 'pending_selection'
         });
 
         // 标记邀请码为已使用
-        InviteCodeService.use(inviteCode.trim().toUpperCase(), newUser.handle);
+        if (config.requireInviteCode && inviteCode) {
+            InviteCodeService.use(inviteCode.trim().toUpperCase(), newUser.handle);
+        }
 
         const timestamp = new Date().toISOString();
-        console.info(`[OAuth注册审计] 时间 ${timestamp}，IP ${clientIp}，提供商 ${provider}，用户名 ${newUser.handle}，邀请码 ${inviteCode.trim().toUpperCase()}`);
+        console.info(`[OAuth注册审计] 时间 ${timestamp}，IP ${clientIp}，提供商 ${provider}，用户名 ${newUser.handle}，邮箱 ${verifiedEmail || '无'}，邀请码 ${inviteCode ? inviteCode.trim().toUpperCase() : '无'}`);
 
         // 清除会话中的待注册用户信息
         delete req.session.oauthPendingUser;
@@ -1181,6 +1366,8 @@ function sanitizeInput(payload) {
     const name = typeof payload.name === 'string' ? payload.name.trim() : '';
     const password = typeof payload.password === 'string' ? payload.password.trim() : '';
     const inviteCode = typeof payload.inviteCode === 'string' ? payload.inviteCode.trim() : '';
+    const email = typeof payload.email === 'string' ? payload.email.trim() : '';
+    const emailCode = typeof payload.emailCode === 'string' ? payload.emailCode.trim() : '';
 
     if (!handle) {
         throw new Error('用户标识不能为空');
@@ -1208,11 +1395,23 @@ function sanitizeInput(payload) {
         throw new Error('邀请码过长（最多 32 个字符）');
     }
 
+    // 邮箱验证
+    if (email && email.length > 256) {
+        throw new Error('邮箱地址过长（最多 256 个字符）');
+    }
+
+    // 邮箱验证码
+    if (emailCode && emailCode.length > 10) {
+        throw new Error('验证码格式不正确');
+    }
+
     return {
         handle,
         name,
         password,
         inviteCode,
+        email,
+        emailCode,
     };
 }
 

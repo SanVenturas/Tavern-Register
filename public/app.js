@@ -36,11 +36,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = formElement instanceof HTMLFormElement ? formElement : null;
     const loginLink = loginLinkElement instanceof HTMLAnchorElement ? loginLinkElement : null;
     
-    // 检查是否需要邀请码
-    checkInviteCodeRequirement();
+    // 检查注册配置（邀请码、邮箱验证等）
+    checkRegistrationConfig();
     
     // 添加用户名实时预览
     setupHandlePreview();
+    
+    // 设置邮箱验证码发送功能
+    setupEmailVerification();
 
     if (loginLink) {
         fetch('/health', { headers: { accept: 'application/json' } })
@@ -70,6 +73,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const passwordValue = formData.get('password');
         const confirmValue = formData.get('confirm');
         const inviteCodeValue = formData.get('inviteCode');
+        const emailValue = formData.get('email');
+        const emailCodeValue = formData.get('emailCode');
 
         const payload = {
             name: typeof nameValue === 'string' ? nameValue.trim() : '',
@@ -77,6 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
             password: typeof passwordValue === 'string' ? passwordValue.trim() : '',
             confirm: typeof confirmValue === 'string' ? confirmValue.trim() : '',
             inviteCode: typeof inviteCodeValue === 'string' ? inviteCodeValue.trim().toUpperCase() : '',
+            email: typeof emailValue === 'string' ? emailValue.trim() : '',
+            emailCode: typeof emailCodeValue === 'string' ? emailCodeValue.trim() : '',
         };
 
         if (!payload.name || !payload.handle) {
@@ -120,6 +127,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // 如果密码为空，将使用默认密码，不需要确认密码
 
+        // 检查是否需要邮箱验证
+        const emailField = document.getElementById('email-field');
+        const emailCodeField = document.getElementById('email-code-field');
+        const emailInput = emailField?.querySelector('input[name="email"]');
+        const emailCodeInput = emailCodeField?.querySelector('input[name="emailCode"]');
+        const requireEmail = emailField && emailField.style.display !== 'none' && emailInput?.hasAttribute('required');
+        
+        if (requireEmail) {
+            if (!payload.email) {
+                setStatus('邮箱地址不能为空。', true);
+                if (emailInput) {
+                    emailInput.focus();
+                }
+                return;
+            }
+            
+            // 验证邮箱格式
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(payload.email)) {
+                setStatus('邮箱格式不正确。', true);
+                if (emailInput) {
+                    emailInput.focus();
+                }
+                return;
+            }
+            
+            if (!payload.emailCode) {
+                setStatus('邮箱验证码不能为空，请先获取验证码。', true);
+                if (emailCodeInput) {
+                    emailCodeInput.focus();
+                }
+                return;
+            }
+        }
+        
         // 检查是否需要邀请码
         const inviteCodeField = document.getElementById('invite-code-field');
         const inviteCodeInput = inviteCodeField?.querySelector('input[name="inviteCode"]');
@@ -138,6 +180,8 @@ document.addEventListener('DOMContentLoaded', () => {
             handle: payload.handle,
             password: payload.password,
             inviteCode: payload.inviteCode,
+            email: payload.email,
+            emailCode: payload.emailCode,
         };
 
         try {
@@ -457,8 +501,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 检查是否需要邀请码
-    async function checkInviteCodeRequirement() {
+    // 检查注册配置（邀请码、邮箱验证等）
+    async function checkRegistrationConfig() {
         try {
             const response = await fetch('/api/config', { headers: { accept: 'application/json' } });
             if (!response.ok) {
@@ -467,26 +511,273 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const data = await response.json();
+            
+            // 邀请码配置
             const inviteCodeField = document.getElementById('invite-code-field');
             const inviteCodeInput = inviteCodeField?.querySelector('input[name="inviteCode"]');
             
-            if (!inviteCodeField || !inviteCodeInput) {
-                console.error('邀请码字段未找到');
+            if (inviteCodeField && inviteCodeInput) {
+                if (data.requireInviteCode) {
+                    inviteCodeField.style.display = 'grid';
+                    inviteCodeInput.required = true;
+                    inviteCodeInput.setAttribute('required', 'required');
+                    console.log('邀请码功能已启用');
+                } else {
+                    inviteCodeField.style.display = 'none';
+                    inviteCodeInput.required = false;
+                    inviteCodeInput.removeAttribute('required');
+                }
+            }
+            
+            // 邮箱验证配置
+            const emailField = document.getElementById('email-field');
+            const emailCodeField = document.getElementById('email-code-field');
+            const emailInput = emailField?.querySelector('input[name="email"]');
+            const emailCodeInput = emailCodeField?.querySelector('input[name="emailCode"]');
+            
+            if (emailField && emailCodeField && emailInput && emailCodeInput) {
+                if (data.requireEmailVerification) {
+                    emailField.style.display = 'grid';
+                    emailCodeField.style.display = 'grid';
+                    emailInput.required = true;
+                    emailCodeInput.required = true;
+                    emailInput.setAttribute('required', 'required');
+                    emailCodeInput.setAttribute('required', 'required');
+                    console.log('邮箱验证功能已启用');
+                } else {
+                    emailField.style.display = 'none';
+                    emailCodeField.style.display = 'none';
+                    emailInput.required = false;
+                    emailCodeInput.required = false;
+                    emailInput.removeAttribute('required');
+                    emailCodeInput.removeAttribute('required');
+                }
+            }
+        } catch (error) {
+            console.error('检查注册配置失败:', error);
+        }
+    }
+    
+    // 设置邮箱验证码发送功能
+    function setupEmailVerification() {
+        const sendCodeBtn = document.getElementById('send-code-btn');
+        const emailInput = document.querySelector('input[name="email"]');
+        const captchaModal = document.getElementById('captcha-modal');
+        const captchaQuestion = document.getElementById('captcha-question');
+        const captchaAnswer = document.getElementById('captcha-answer');
+        const captchaError = document.getElementById('captcha-error');
+        const captchaRefresh = document.getElementById('captcha-refresh');
+        const captchaSubmit = document.getElementById('captcha-submit');
+        
+        if (!sendCodeBtn || !emailInput) {
+            return;
+        }
+        
+        let countdown = 0;
+        let countdownTimer = null;
+        let currentCaptcha = null;
+        
+        function updateButtonState() {
+            if (countdown > 0) {
+                sendCodeBtn.textContent = `${countdown}秒后重试`;
+                sendCodeBtn.disabled = true;
+                sendCodeBtn.style.opacity = '0.6';
+                sendCodeBtn.style.cursor = 'not-allowed';
+            } else {
+                sendCodeBtn.textContent = '发送验证码';
+                sendCodeBtn.disabled = false;
+                sendCodeBtn.style.opacity = '1';
+                sendCodeBtn.style.cursor = 'pointer';
+            }
+        }
+        
+        function startCountdown(seconds) {
+            countdown = seconds;
+            updateButtonState();
+            
+            if (countdownTimer) {
+                clearInterval(countdownTimer);
+            }
+            
+            countdownTimer = setInterval(() => {
+                countdown--;
+                updateButtonState();
+                
+                if (countdown <= 0) {
+                    clearInterval(countdownTimer);
+                    countdownTimer = null;
+                }
+            }, 1000);
+        }
+        
+        // 生成简单的数学验证题
+        function generateCaptcha() {
+            const operators = ['+', '-', '×'];
+            const operator = operators[Math.floor(Math.random() * operators.length)];
+            let num1, num2, answer;
+            
+            switch (operator) {
+                case '+':
+                    num1 = Math.floor(Math.random() * 50) + 1;
+                    num2 = Math.floor(Math.random() * 50) + 1;
+                    answer = num1 + num2;
+                    break;
+                case '-':
+                    num1 = Math.floor(Math.random() * 50) + 20;
+                    num2 = Math.floor(Math.random() * 20) + 1;
+                    answer = num1 - num2;
+                    break;
+                case '×':
+                    num1 = Math.floor(Math.random() * 9) + 2;
+                    num2 = Math.floor(Math.random() * 9) + 2;
+                    answer = num1 * num2;
+                    break;
+            }
+            
+            return {
+                question: `${num1} ${operator} ${num2} = ?`,
+                answer: answer
+            };
+        }
+        
+        // 显示验证码弹窗
+        function showCaptchaModal() {
+            if (!captchaModal || !captchaQuestion || !captchaAnswer) return;
+            
+            currentCaptcha = generateCaptcha();
+            captchaQuestion.textContent = currentCaptcha.question;
+            captchaAnswer.value = '';
+            captchaError.textContent = '';
+            captchaModal.style.display = 'flex';
+            
+            setTimeout(() => captchaAnswer.focus(), 100);
+        }
+        
+        // 隐藏验证码弹窗
+        function hideCaptchaModal() {
+            if (captchaModal) {
+                captchaModal.style.display = 'none';
+            }
+            currentCaptcha = null;
+        }
+        
+        // 验证答案并发送邮件验证码
+        async function verifyCaptchaAndSendCode() {
+            if (!currentCaptcha) return;
+            
+            const userAnswer = parseInt(captchaAnswer.value.trim(), 10);
+            
+            if (isNaN(userAnswer)) {
+                captchaError.textContent = '请输入数字答案';
+                captchaAnswer.focus();
                 return;
             }
             
-            if (data.requireInviteCode) {
-                inviteCodeField.style.display = 'grid';
-                inviteCodeInput.required = true;
-                inviteCodeInput.setAttribute('required', 'required');
-                console.log('邀请码功能已启用');
-            } else {
-                inviteCodeField.style.display = 'none';
-                inviteCodeInput.required = false;
-                inviteCodeInput.removeAttribute('required');
+            if (userAnswer !== currentCaptcha.answer) {
+                captchaError.textContent = '答案错误，请重试';
+                captchaAnswer.value = '';
+                captchaAnswer.focus();
+                // 换一道题
+                currentCaptcha = generateCaptcha();
+                captchaQuestion.textContent = currentCaptcha.question;
+                return;
             }
-        } catch (error) {
-            console.error('检查邀请码要求失败:', error);
+            
+            // 答案正确，隐藏弹窗并发送验证码
+            hideCaptchaModal();
+            
+            const email = emailInput.value.trim();
+            
+            // 禁用按钮，显示发送中
+            sendCodeBtn.textContent = '发送中...';
+            sendCodeBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/email/send-code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({ email }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    setStatus('验证码已发送，请查收邮箱', false);
+                    startCountdown(60);
+                    
+                    // 自动聚焦到验证码输入框
+                    const emailCodeInput = document.querySelector('input[name="emailCode"]');
+                    if (emailCodeInput) {
+                        emailCodeInput.focus();
+                    }
+                } else {
+                    setStatus(data.message || '发送验证码失败', true);
+                    updateButtonState();
+                }
+            } catch (error) {
+                console.error('发送验证码失败:', error);
+                setStatus('发送验证码失败，请稍后重试', true);
+                updateButtonState();
+            }
+        }
+        
+        // 绑定事件
+        sendCodeBtn.addEventListener('click', () => {
+            const email = emailInput.value.trim();
+            
+            if (!email) {
+                setStatus('请先输入邮箱地址', true);
+                emailInput.focus();
+                return;
+            }
+            
+            // 简单的邮箱格式验证
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                setStatus('邮箱格式不正确', true);
+                emailInput.focus();
+                return;
+            }
+            
+            // 显示人机验证弹窗
+            showCaptchaModal();
+        });
+        
+        // 刷新验证题
+        if (captchaRefresh) {
+            captchaRefresh.addEventListener('click', () => {
+                currentCaptcha = generateCaptcha();
+                captchaQuestion.textContent = currentCaptcha.question;
+                captchaAnswer.value = '';
+                captchaError.textContent = '';
+                captchaAnswer.focus();
+            });
+        }
+        
+        // 提交验证
+        if (captchaSubmit) {
+            captchaSubmit.addEventListener('click', verifyCaptchaAndSendCode);
+        }
+        
+        // 回车提交
+        if (captchaAnswer) {
+            captchaAnswer.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    verifyCaptchaAndSendCode();
+                }
+            });
+        }
+        
+        // 点击遮罩关闭
+        if (captchaModal) {
+            const overlay = captchaModal.querySelector('.captcha-overlay');
+            if (overlay) {
+                overlay.addEventListener('click', hideCaptchaModal);
+            }
         }
     }
 });

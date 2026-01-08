@@ -91,6 +91,46 @@ export class DataStore {
     }
 
     /**
+     * 根据邮箱获取用户
+     */
+    static getUserByEmail(email) {
+        if (!email) return null;
+        const normalizedEmail = email.toLowerCase().trim();
+        const users = readJsonFile(USERS_FILE, []);
+        return users.find(u => u.email && u.email.toLowerCase().trim() === normalizedEmail);
+    }
+
+    /**
+     * 根据 IP 获取用户列表（用于检查 IP 是否已注册）
+     */
+    static getUsersByIp(ip) {
+        if (!ip) return [];
+        const users = readJsonFile(USERS_FILE, []);
+        return users.filter(u => u.ip === ip);
+    }
+
+    /**
+     * 检查 IP 是否已注册过（排除 pending 状态）
+     */
+    static hasIpRegistered(ip) {
+        if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1') {
+            // 本地环境不限制
+            return false;
+        }
+        const users = this.getUsersByIp(ip);
+        // 只检查已激活的用户
+        return users.some(u => u.registrationStatus === 'active');
+    }
+
+    /**
+     * 检查邮箱是否已被使用
+     */
+    static isEmailUsed(email) {
+        const user = this.getUserByEmail(email);
+        return !!user;
+    }
+
+    /**
      * 添加服务器
      */
     static addServer(serverInfo) {

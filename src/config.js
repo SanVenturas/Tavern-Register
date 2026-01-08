@@ -23,6 +23,19 @@ const ADMIN_PANEL_PATH = process.env.ADMIN_PANEL_PATH || '/admin';
 const MAX_LOGIN_ATTEMPTS = parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5', 10);
 const LOGIN_LOCKOUT_TIME = parseInt(process.env.LOGIN_LOCKOUT_TIME || '15', 10) * 60 * 1000; // 转换为毫秒
 
+// 邮箱验证配置
+const REQUIRE_EMAIL_VERIFICATION = parseBoolean(process.env.REQUIRE_EMAIL_VERIFICATION);
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
+const SMTP_SECURE = process.env.SMTP_SECURE !== 'false'; // 默认为 true
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_FROM = process.env.SMTP_FROM || '';
+const SITE_NAME = process.env.SITE_NAME || 'TavernRegister';
+
+// IP 注册限制配置
+const ENABLE_IP_LIMIT = parseBoolean(process.env.ENABLE_IP_LIMIT);
+
 // OAuth 配置是可选的
 const OPTIONAL_OAUTH_ENV = [
     'GITHUB_CLIENT_ID',
@@ -100,6 +113,17 @@ export function loadConfig() {
         maxLoginAttempts: MAX_LOGIN_ATTEMPTS,
         loginLockoutTime: LOGIN_LOCKOUT_TIME,
         oauthEnabled,
+        // 邮箱验证配置
+        requireEmailVerification: REQUIRE_EMAIL_VERIFICATION,
+        smtpHost: SMTP_HOST,
+        smtpPort: SMTP_PORT,
+        smtpSecure: SMTP_SECURE,
+        smtpUser: SMTP_USER,
+        smtpPass: SMTP_PASS,
+        smtpFrom: SMTP_FROM,
+        siteName: SITE_NAME,
+        // IP 限制配置
+        enableIpLimit: ENABLE_IP_LIMIT,
         ...oauthConfig,
     };
 }

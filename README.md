@@ -84,6 +84,14 @@ ADMIN_PANEL_PASSWORD=admin123
 # 开启后用户注册必须提供有效邀请码
 REQUIRE_INVITE_CODE=false
 
+# 是否启用邮箱验证 (true/false)
+# 开启后用户注册必须验证邮箱，且每个邮箱只能注册一次
+REQUIRE_EMAIL_VERIFICATION=false
+
+# 是否启用 IP 注册限制 (true/false)
+# 开启后每个 IP 地址只能注册一次，防止批量刷号
+ENABLE_IP_LIMIT=false
+
 # 管理员登录页面路径
 # 建议修改此路径以防止暴力破解扫描，例如：/my-secret-login
 ADMIN_LOGIN_PATH=/admin/login
@@ -96,6 +104,55 @@ MAX_LOGIN_ATTEMPTS=5
 
 # 登录失败后的锁定时间（分钟）
 LOGIN_LOCKOUT_TIME=15
+```
+
+### 邮箱验证配置（可选）
+
+如需启用邮箱验证功能，需配置 SMTP 邮件服务：
+
+```env
+# 启用邮箱验证
+REQUIRE_EMAIL_VERIFICATION=true
+
+# SMTP 服务器配置
+SMTP_HOST=smtp.example.com      # SMTP 服务器地址
+SMTP_PORT=465                   # SMTP 端口（SSL 通常为 465，TLS 为 587）
+SMTP_SECURE=true                # 是否使用 SSL（465 端口设为 true，587 端口设为 false）
+SMTP_USER=your-email@example.com    # SMTP 登录用户名
+SMTP_PASS=your-email-password       # SMTP 登录密码或应用密码
+SMTP_FROM=TavernRegister <noreply@example.com>  # 发件人显示名称和地址（可选）
+
+# 网站名称（用于邮件标题和内容）
+SITE_NAME=TavernRegister
+```
+
+#### 常见邮件服务商配置示例
+
+**QQ 邮箱：**
+```env
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your-qq@qq.com
+SMTP_PASS=your-authorization-code  # 使用授权码，非 QQ 密码
+```
+
+**163 邮箱：**
+```env
+SMTP_HOST=smtp.163.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your-email@163.com
+SMTP_PASS=your-authorization-code  # 使用授权码
+```
+
+**Gmail：**
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password  # 使用应用专用密码
 ```
 
 第三方 OAuth 登录配置
@@ -261,6 +318,14 @@ Linux.do 默认使用 `https://connect.linux.do` 作为 OAuth 端点，本项目
 - 使用默认密码注册的用户会收到提示，要求登录后第一时间修改密码。
 - OAuth 一键注册的用户将自动使用默认密码 `123456`。
 - 如果启用了邀请码功能（`REQUIRE_INVITE_CODE=true`），所有注册方式都需要有效的邀请码。
+- 如果启用了邮箱验证功能（`REQUIRE_EMAIL_VERIFICATION=true`）：
+  - 用户注册时需要验证邮箱
+  - 每个邮箱只能注册一个账号
+  - 邮箱地址会同步上传到 SillyTavern 服务器
+  - 验证码有效期为 10 分钟，发送间隔为 60 秒
+- 如果启用了 IP 限制功能（`ENABLE_IP_LIMIT=true`）：
+  - 每个 IP 地址只能注册一个账号
+  - 本地地址（127.0.0.1、::1）不受此限制
 - 用户注册信息会保存在 `data/users.json` 文件中。
 - 邀请码信息会保存在 `data/invite-codes.json` 文件中。
 - SillyTavern 基础信息通过官方 API 操作，不直接改动酒馆的数据文件。
