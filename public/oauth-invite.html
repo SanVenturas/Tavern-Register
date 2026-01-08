@@ -162,11 +162,11 @@
         .btn-send-code {
             padding: 0 1.25rem;
             height: 50px;
-            background: #edf2f7;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
             color: var(--accent-color);
             font-size: 0.875rem;
             font-weight: 600;
-            border: 2px solid #e2e8f0;
+            border: 2px solid rgba(102, 126, 234, 0.4);
             border-radius: 10px;
             cursor: pointer;
             transition: all 0.2s ease;
@@ -174,13 +174,20 @@
         }
         
         .btn-send-code:hover:not(:disabled) {
-            background: #e2e8f0;
-            border-color: #cbd5e0;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+            border-color: var(--accent-color);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+        
+        .btn-send-code:active:not(:disabled) {
+            transform: translateY(0);
         }
         
         .btn-send-code:disabled {
-            opacity: 0.6;
+            opacity: 0.5;
             cursor: not-allowed;
+            transform: none;
         }
         
         .form-hint {
