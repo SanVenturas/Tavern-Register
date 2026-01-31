@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>管理员面板 - TavernRegister</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+            /* 覆盖 styles.css 中的 body 样式 */
+            display: block;
+            align-items: unset;
+            justify-content: unset;
+        }
+        /* 管理员页面独立的 layout */
+        .admin-layout {
+            width: min(90vw, 90vw);
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 0;
+        }
+        .admin-container {
+            max-width: 100%;
+            width: 100%;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        
+        @media (min-width: 768px) {
+            .admin-container {
+                max-width: 95%;
+                width: 95%;
+                margin: 0 auto;
+                padding: 2rem;
+            }
+        }
+        
+        @media (min-width: 1200px) {
+            .admin-container {
+                max-width: 98%;
+                width: 98%;
+            }
+        }
+        
+        @media (min-width: 1600px) {
+            .admin-container {
+                max-width: 1920px;
+                width: 95%;
+            }
+        }
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        .admin-header h1 {
+            margin: 0;
+        }
+        .logout-btn {
+            background: rgba(255, 118, 117, 0.2);
+            border: 1px solid var(--error);
+            color: var(--error);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .logout-btn:hover {
+            background: rgba(255, 118, 117, 0.3);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: rgba(16, 18, 26, 0.6);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .stat-card h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.9rem;
+            color: rgba(240, 244, 255, 0.6);
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: none;
+            border: none;
+            color: rgba(240, 244, 255, 0.6);
+            cursor: pointer;
+            font-size: 1rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .table-container {
+            overflow-x: auto;
+            overflow-y: auto;
+            background: rgba(16, 18, 26, 0.6);
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-height: calc(100vh - 350px);
+            min-height: 400px;
+            -webkit-overflow-scrolling: touch;
+            width: 100%;
+        }
+        table {
+            width: 100%;
+            min-width: 1000px;
+            border-collapse: collapse;
+            table-layout: auto;
+        }
+        th, td {
+            padding: 1rem 1.25rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        th {
+            white-space: nowrap;
+        }
+        td {
+            white-space: normal;
+            word-wrap: break-word;
+            max-width: 200px;
+        }
+        td:first-child,
+        td:nth-child(2),
+        td:nth-child(3) {
+            white-space: nowrap;
+            max-width: none;
+        }
+        
+        @media (max-width: 767px) {
+            th, td {
+                padding: 0.5rem;
+                font-size: 0.9rem;
+            }
+            .admin-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            .admin-header h1 {
+                font-size: 1.5rem;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .stat-card .value {
+                font-size: 1.5rem;
+            }
+            .tabs {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .tab {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+                white-space: nowrap;
+            }
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            .action-btn {
+                display: block;
+                width: 100%;
+                margin-bottom: 0.5rem;
+                margin-right: 0;
+            }
+            .table-container {
+                padding: 1rem;
+                max-height: calc(100vh - 300px);
+            }
+            table {
+                min-width: 600px;
+            }
+            td {
+                max-width: 150px;
+            }
+        }
+        
+        @media (min-width: 768px) and (max-width: 1199px) {
+            .table-container {
+                max-height: calc(100vh - 380px);
+            }
+        }
+        
+        @media (min-width: 1200px) {
+            .table-container {
+                max-height: calc(100vh - 320px);
+            }
+            table {
+                min-width: 1200px;
+            }
+            th, td {
+                padding: 1rem 1.5rem;
+            }
+        }
+        
+        @media (min-width: 1600px) {
+            table {
+                min-width: 1400px;
+            }
+            th, td {
+                padding: 1.25rem 2rem;
+            }
+        }
+        
+        th {
+            font-weight: 600;
+            color: rgba(240, 244, 255, 0.8);
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .badge-success {
+            background: rgba(85, 239, 196, 0.2);
+            color: var(--success);
+        }
+        .badge-error {
+            background: rgba(255, 118, 117, 0.2);
+            color: var(--error);
+        }
+        .badge-warning {
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+        }
+        .badge-manual {
+            background: rgba(99, 102, 241, 0.2);
+            color: #6366f1;
+        }
+        .badge-github {
+            background: rgba(0, 0, 0, 0.3);
+            color: #ffffff;
+        }
+        .badge-linuxdo {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+        .badge-discord {
+            background: rgba(88, 101, 242, 0.2);
+            color: #5865f2;
+        }
+        .badge-oauth {
+            background: rgba(168, 85, 247, 0.2);
+            color: #a855f7;
+        }
+        .badge-default {
+            background: rgba(156, 163, 175, 0.2);
+            color: #9ca3af;
+        }
+        .action-btn {
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            border: 1px solid;
+            cursor: pointer;
+            font-size: 0.85rem;
+            margin-right: 0.5rem;
+        }
+        .btn-danger {
+            background: rgba(255, 118, 117, 0.2);
+            border-color: var(--error);
+            color: var(--error);
+        }
+        .btn-success {
+            background: rgba(85, 239, 196, 0.2);
+            border-color: var(--success);
+            color: var(--success);
+        }
+        .create-invite-form {
+            background: rgba(16, 18, 26, 0.6);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .code-display {
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.5rem;
+            border-radius: 6px;
+            margin-top: 0.5rem;
+        }
+        .pagination-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(16, 18, 26, 0.6);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.15s ease;
+        }
+        .pagination-btn:hover:not(:disabled) {
+            background: rgba(16, 18, 26, 0.8);
+            border-color: var(--accent);
+        }
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .pagination-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+        select {
+            padding: 0.5rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(16, 18, 26, 0.6);
+            color: var(--text);
+            font-size: 0.9rem;
+        }
+        select:focus {
+            outline: 2px solid var(--accent);
+            border-color: transparent;
+        }
+        .field input[type="datetime-local"],
+        input[type="datetime-local"] {
+            padding: 0.5rem 0.75rem !important;
+            padding-right: 2.5rem !important;
+            border-radius: 6px !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            background: rgba(16, 18, 26, 0.6) !important;
+            color: var(--text) !important;
+            font-size: 0.9rem !important;
+            cursor: pointer !important;
+            min-height: 42px !important;
+            height: 42px !important;
+            width: 100% !important;
+            position: relative !important;
+            z-index: 1 !important;
+            pointer-events: auto !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+        input[type="datetime-local"]:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(16, 18, 26, 0.7);
+        }
+        input[type="datetime-local"]:focus {
+            outline: 2px solid var(--accent);
+            border-color: transparent;
+            background: rgba(16, 18, 26, 0.8);
+        }
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            filter: invert(1);
+            opacity: 0.8;
+            padding: 0.25rem;
+            margin-left: 0.5rem;
+            position: absolute;
+            right: 0.5rem;
+            width: 20px;
+            height: 20px;
+            z-index: 2;
+        }
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+        }
+        /* 确保输入框的文本区域可以点击 */
+        input[type="datetime-local"]::-webkit-datetime-edit {
+            cursor: pointer;
+            width: 100%;
+            padding-right: 2rem;
+        }
+        input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper {
+            cursor: pointer;
+        }
+        input[type="datetime-local"]::-webkit-datetime-edit-text {
+            cursor: pointer;
+        }
+        input[type="datetime-local"]::-webkit-inner-spin-button,
+        input[type="datetime-local"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        /* Firefox */
+        input[type="datetime-local"]::-moz-calendar-picker-indicator {
+            cursor: pointer;
+            opacity: 0.8;
+        }
+        input[type="datetime-local"]::-moz-calendar-picker-indicator:hover {
+            opacity: 1;
+        }
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-content {
+            background: #1a1d29;
+            /* Match theme - assuming dark theme based on existing styles */
+            background: rgba(16, 18, 26, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 800px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .modal-header h3 {
+            margin: 0;
+            color: var(--text, #fff);
+        }
+        .close-modal {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+        .close-modal:hover {
+            color: var(--text, #fff);
+        }
+    </style>
+</head>
+<body>
+    <main class="admin-layout">
+        <section class="card admin-container">
+            <div class="admin-header">
+                <h1>管理员面板</h1>
+                <button class="logout-btn" id="logout-btn">登出</button>
+            </div>
+
+            <div class="stats-grid" id="stats-grid"></div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="users">用户列表</button>
+                <button class="tab" data-tab="servers">服务器管理</button>
+                <button class="tab" data-tab="invites">邀请码管理</button>
+            </div>
+
+            <div id="users-tab" class="tab-content active">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0.5rem;">
+                    <div>
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span>每页显示：</span>
+                            <select id="users-limit" onchange="changeUsersPage(1)">
+                                <option value="10">10</option>
+                                <option value="20" selected>20</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div id="users-pagination-info" style="color: rgba(240, 244, 255, 0.7);"></div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用户名</th>
+                                <th>显示名称</th>
+                                <th>注册方式</th>
+                                <th>邀请码</th>
+                                <th>IP 地址</th>
+                                <th>注册时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody"></tbody>
+                    </table>
+                </div>
+                <div id="users-pagination" style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;"></div>
+            </div>
+
+            <div id="servers-tab" class="tab-content">
+                <div class="create-invite-form">
+                    <h3>添加服务器</h3>
+                    <form id="add-server-form">
+                        <div class="form-row">
+                            <label class="field">
+                                <span>服务器名称</span>
+                                <input type="text" name="name" placeholder="例如: 美国节点" required>
+                            </label>
+                            <label class="field">
+                                <span>服务器 URL</span>
+                                <input type="url" name="url" placeholder="http://127.0.0.1:8000" required>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field">
+                                <span>管理员账号</span>
+                                <input type="text" name="admin_username" required>
+                            </label>
+                            <label class="field">
+                                <span>管理员密码</span>
+                                <input type="password" name="admin_password" required>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field" style="grid-column: 1 / -1;">
+                                <span>服务器描述（可选）</span>
+                                <textarea name="description" rows="2" placeholder="例如：地区、性能、适用场景等" style="width: 100%; resize: vertical;"></textarea>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field">
+                                <span>服务器提供方（可选）</span>
+                                <input type="text" name="provider" placeholder="例如：某云服务商 / 个人">
+                            </label>
+                            <label class="field">
+                                <span>维护者（可选）</span>
+                                <input type="text" name="maintainer" placeholder="例如：管理员昵称">
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field">
+                                <span>维护者联系方式（可选）</span>
+                                <input type="text" name="contact" placeholder="例如：邮箱 / Telegram / QQ">
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field" style="grid-column: 1 / -1;">
+                                <span>服务器公告（可选）</span>
+                                <textarea name="announcement" rows="3" placeholder="例如：服务器维护时间、规则说明等" style="width: 100%; resize: vertical;"></textarea>
+                            </label>
+                        </div>
+                        <div style="display: flex; gap: 1rem;">
+                            <button type="button" class="secondary" id="test-connection-btn">测试连接</button>
+                            <button type="submit" class="primary">添加服务器</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>名称</th>
+                                <th>URL</th>
+                                <th>描述</th>
+                                <th>提供方</th>
+                                <th>维护者</th>
+                                <th>已注册用户</th>
+                                <th>状态</th>
+                                <th>注册状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="servers-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="invites-tab" class="tab-content">
+                <div class="create-invite-form">
+                    <h3>创建邀请码</h3>
+                    <form id="create-invite-form">
+                        <div class="form-row">
+                            <label class="field">
+                                <span>数量</span>
+                                <input type="number" name="count" min="1" max="100" value="1" required>
+                            </label>
+                            <label class="field">
+                                <span>最大使用次数</span>
+                                <input type="number" name="maxUses" min="1" max="1000" value="1" required>
+                            </label>
+                            <label class="field">
+                                <span>过期时间（可选）</span>
+                                <input type="datetime-local" name="expiresAt" id="expiresAt-input" style="cursor: pointer;">
+                            </label>
+                        </div>
+                        <button type="submit" class="primary">创建邀请码</button>
+                    </form>
+                    <div id="created-codes"></div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0.5rem; flex-wrap: wrap; gap: 1rem;">
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button type="button" class="action-btn btn-danger" id="delete-all-btn" style="display: none;" onclick="deleteAllInviteCodes()">一键删除所有邀请码</button>
+                        <button type="button" class="action-btn btn-danger" id="delete-used-btn" style="display: none;" onclick="deleteUsedInviteCodes()">一键删除已使用邀请码</button>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="select-all-codes" onchange="toggleSelectAllCodes()">
+                            <span>全选</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span>每页显示：</span>
+                            <select id="invites-limit" onchange="changeInvitesPage(1)">
+                                <option value="10">10</option>
+                                <option value="20" selected>20</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div id="invites-pagination-info" style="color: rgba(240, 244, 255, 0.7);"></div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" id="select-all-header" onchange="toggleSelectAllCodes()">
+                                </th>
+                                <th>邀请码</th>
+                                <th>状态</th>
+                                <th>使用次数</th>
+                                <th>最大次数</th>
+                                <th>过期时间</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="invites-tbody"></tbody>
+                    </table>
+                </div>
+                <div id="invites-pagination" style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;"></div>
+            </div>
+
+            <div id="status" role="status" aria-live="polite"></div>
+        </section>
+
+        <!-- Edit Server Modal -->
+        <div id="edit-server-modal" class="modal-overlay">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>编辑服务器</h3>
+                    <button class="close-modal" onclick="closeEditModal()">&times;</button>
+                </div>
+                <form id="edit-server-form">
+                    <input type="hidden" name="id">
+                    <div class="form-row">
+                        <label class="field">
+                            <span>服务器名称</span>
+                            <input type="text" name="name" placeholder="例如: 美国节点" required>
+                        </label>
+                        <label class="field">
+                            <span>服务器 URL</span>
+                            <input type="url" name="url" placeholder="http://127.0.0.1:8000" required>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field">
+                            <span>管理员账号</span>
+                            <input type="text" name="admin_username" required>
+                        </label>
+                        <label class="field">
+                            <span>管理员密码</span>
+                            <input type="password" name="admin_password" placeholder="留空则不修改">
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field" style="grid-column: 1 / -1;">
+                            <span>服务器描述（可选）</span>
+                            <textarea name="description" rows="2" placeholder="例如：地区、性能、适用场景等" style="width: 100%; resize: vertical;"></textarea>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field">
+                            <span>服务器提供方（可选）</span>
+                            <input type="text" name="provider" placeholder="例如：某云服务商 / 个人">
+                        </label>
+                        <label class="field">
+                            <span>维护者（可选）</span>
+                            <input type="text" name="maintainer" placeholder="例如：管理员昵称">
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field">
+                            <span>维护者联系方式（可选）</span>
+                            <input type="text" name="contact" placeholder="例如：邮箱 / Telegram / QQ">
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field" style="grid-column: 1 / -1;">
+                            <span>服务器公告（可选）</span>
+                            <textarea name="announcement" rows="3" placeholder="例如：服务器维护时间、规则说明等" style="width: 100%; resize: vertical;"></textarea>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field" style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" name="registrationPaused" style="width: auto;">
+                            <span>暂停注册（暂停后新用户无法注册此服务器，但已注册用户可以继续使用）</span>
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                        <button type="button" class="secondary" onclick="closeEditModal()">取消</button>
+                        <button type="submit" class="primary">保存更改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </main>
+    <script src="admin.js"></script>
+</body>
+</html>
+

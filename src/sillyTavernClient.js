@@ -57,10 +57,25 @@ export class SillyTavernClient {
     }
 
     normalizeHandle(handle) {
-        return kebabCase(String(handle ?? '').trim());
+        // 移除 kebabCase，避免数字和字母被拆分
+        // 只允许字母、数字、下划线、减号，其他字符替换为减号
+        // 保持原始大小写或转为小写取决于需求，这里为了兼容性和文件系统安全，转为小写
+        return String(handle ?? '').trim().replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase();
     }
 
-    async registerUser({ handle, name, password, makeAdmin = false }) {
+    /**
+     * 测试连接
+     */
+    async testConnection() {
+        try {
+            const session = await this.#loginAsAdmin();
+            return { success: true };
+        } catch (error) {
+            return { success: false, message: error.message };
+        }
+    }
+
+    async registerUser({ handle, name, password, email, makeAdmin = false }) {
         if (!handle || !name) {
             throw new Error('用户标识和显示名称均为必填项');
         }
@@ -71,8 +86,8 @@ export class SillyTavernClient {
         }
 
         const session = await this.#loginAsAdmin();
-    const createContext = await this.#fetchCsrfToken(session.cookie);
-    const authCookie = createContext.cookie ?? session.cookie;
+        const createContext = await this.#fetchCsrfToken(session.cookie);
+        const authCookie = createContext.cookie ?? session.cookie;
 
         const payload = {
             handle: normalizedHandle,
@@ -81,6 +96,11 @@ export class SillyTavernClient {
 
         if (password) {
             payload.password = password;
+        }
+
+        // 添加邮箱到 payload（SillyTavern 可能会存储到用户配置中）
+        if (email) {
+            payload.email = email.trim().toLowerCase();
         }
 
         if (makeAdmin) {
@@ -112,10 +132,11 @@ export class SillyTavernClient {
             throw new Error(`创建用户请求失败：${response.status} ${message}`);
         }
 
-    const data = /** @type {Record<string, any>} */ (await response.json());
+        const data = /** @type {Record<string, any>} */ (await response.json());
         return {
             handle: data.handle,
             name: payload.name,
+            email: payload.email,
         };
     }
 
@@ -146,7 +167,7 @@ export class SillyTavernClient {
             throw new Error(`管理员登录失败：${response.status} ${message}`);
         }
 
-    const updatedCookie = extractSessionCookies(response.headers.raw()['set-cookie']);
+        const updatedCookie = extractSessionCookies(response.headers.raw()['set-cookie']);
         if (updatedCookie) {
             session.cookie = updatedCookie;
         }
@@ -172,7 +193,7 @@ export class SillyTavernClient {
             throw new Error(`管理员会话验证失败：${response.status}`);
         }
 
-    const profile = /** @type {Record<string, any>} */ (await response.json());
+        const profile = /** @type {Record<string, any>} */ (await response.json());
         if (!profile?.admin) {
             throw new Error('配置的管理员账户没有管理员权限');
         }
@@ -193,8 +214,8 @@ export class SillyTavernClient {
             throw new Error(`无法获取 CSRF 令牌：${response.status}`);
         }
 
-    const data = /** @type {Record<string, any>} */ (await response.json());
-    const sessionCookie = extractSessionCookies(response.headers.raw()['set-cookie']);
+        const data = /** @type {Record<string, any>} */ (await response.json());
+        const sessionCookie = extractSessionCookies(response.headers.raw()['set-cookie']);
         const effectiveCookie = sessionCookie ?? cookie ?? null;
 
         if (!effectiveCookie && data.token !== 'disabled') {

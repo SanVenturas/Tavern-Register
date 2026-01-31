@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>完成注册 - TavernRegister</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --accent-color: #667eea;
+            --text-color: #2d3748;
+            --success-color: #48bb78;
+            --error-color: #f56565;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .invite-wrapper {
+            width: 100%;
+            max-width: 520px;
+            animation: fadeIn 0.4s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .invite-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        }
+        
+        .invite-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .invite-header h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .invite-header p {
+            color: #718096;
+            font-size: 0.9375rem;
+            line-height: 1.6;
+        }
+        
+        .info-box {
+            background: #edf2f7;
+            border-left: 4px solid var(--accent-color);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .info-box p {
+            color: #4a5568;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .info-box p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .info-box strong {
+            color: var(--accent-color);
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group.hidden {
+            display: none;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-label .required {
+            color: var(--error-color);
+        }
+        
+        .form-input {
+            width: 100%;
+            height: 50px;
+            padding: 0 1rem;
+            font-size: 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            background: white;
+            color: var(--text-color);
+            transition: all 0.2s ease;
+        }
+        
+        .form-input.invite-code {
+            font-size: 1.125rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-align: center;
+        }
+        
+        .form-input:hover {
+            border-color: #cbd5e0;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-input::placeholder {
+            color: #a0aec0;
+            letter-spacing: normal;
+            text-transform: none;
+            font-weight: normal;
+        }
+        
+        .email-input-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .email-input-group .form-input {
+            flex: 1;
+        }
+        
+        .btn-send-code {
+            padding: 0 1.25rem;
+            height: 50px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            color: var(--accent-color);
+            font-size: 0.875rem;
+            font-weight: 600;
+            border: 2px solid rgba(102, 126, 234, 0.4);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        
+        .btn-send-code:hover:not(:disabled) {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+            border-color: var(--accent-color);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+        
+        .btn-send-code:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        .btn-send-code:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .form-hint {
+            font-size: 0.75rem;
+            color: #718096;
+            margin-top: 0.5rem;
+        }
+        
+        .btn-submit {
+            width: 100%;
+            height: 50px;
+            background: var(--primary-gradient);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 0.5rem;
+        }
+        
+        .btn-submit:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.35);
+        }
+        
+        .btn-submit:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .status-message {
+            margin-top: 1rem;
+            padding: 0.875rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-align: center;
+        }
+        
+        .status-message:empty {
+            display: none;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .footer-link {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .footer-link a {
+            color: #718096;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.2s ease;
+        }
+        
+        .footer-link a:hover {
+            color: var(--accent-color);
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 480px) {
+            .invite-card {
+                padding: 2rem 1.5rem;
+            }
+            
+            .invite-header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .form-input,
+            .btn-submit,
+            .btn-send-code {
+                height: 48px;
+            }
+            
+            .email-input-group {
+                flex-direction: column;
+            }
+            
+            .btn-send-code {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="invite-wrapper">
+        <div class="invite-card">
+            <div class="invite-header">
+                <h1>完成注册</h1>
+                <p>登录成功！请完成以下步骤以完成注册</p>
+            </div>
+
+            <div class="info-box">
+                <p><strong>提示信息：</strong></p>
+                <p id="hint-invite" style="display: none;">• 需要有效的邀请码才能完成注册</p>
+                <p id="hint-email" style="display: none;">• 每个邮箱只能注册一个账号</p>
+            </div>
+
+            <form id="invite-form" novalidate>
+                <!-- 邮箱验证字段 -->
+                <div class="form-group hidden" id="email-group">
+                    <label class="form-label">邮箱地址 <span class="required">*</span></label>
+                    <div class="email-input-group">
+                        <input 
+                            type="email" 
+                            name="email" 
+                            class="form-input"
+                            placeholder="请输入邮箱地址" 
+                            maxlength="256"
+                            id="email-input">
+                        <button type="button" class="btn-send-code" id="send-code-btn">发送验证码</button>
+                    </div>
+                    <div class="form-hint">验证码将发送至您的邮箱</div>
+                </div>
+
+                <div class="form-group hidden" id="email-code-group">
+                    <label class="form-label">邮箱验证码 <span class="required">*</span></label>
+                    <input 
+                        type="text" 
+                        name="emailCode" 
+                        class="form-input"
+                        placeholder="请输入6位验证码" 
+                        maxlength="6"
+                        style="letter-spacing: 0.2em; text-align: center;"
+                        id="email-code-input">
+                    <div class="form-hint">验证码有效期10分钟</div>
+                </div>
+
+                <!-- 邀请码字段 -->
+                <div class="form-group hidden" id="invite-group">
+                    <label class="form-label">邀请码 <span class="required">*</span></label>
+                    <input 
+                        type="text" 
+                        name="inviteCode" 
+                        class="form-input invite-code"
+                        placeholder="请输入邀请码" 
+                        maxlength="32"
+                        id="invite-input">
+                    <div class="form-hint">邀请码不区分大小写</div>
+                </div>
+
+                <button type="submit" class="btn-submit" id="submit-btn">完成注册</button>
+            </form>
+            
+            <!-- 人机验证弹窗 -->
+            <div id="captcha-modal" class="captcha-modal" style="display: none;">
+                <div class="captcha-overlay"></div>
+                <div class="captcha-content">
+                    <div class="captcha-header">
+                        <span>🔒</span>
+                        <h3>人机验证</h3>
+                    </div>
+                    <p class="captcha-question" id="captcha-question"></p>
+                    <input type="text" id="captcha-answer" class="captcha-input" placeholder="请输入答案" autocomplete="off">
+                    <div class="captcha-buttons">
+                        <button type="button" id="captcha-refresh" class="captcha-btn secondary">换一题</button>
+                        <button type="button" id="captcha-submit" class="captcha-btn primary">确认</button>
+                    </div>
+                    <p class="captcha-error" id="captcha-error"></p>
+                </div>
+            </div>
+
+            <style>
+                .captcha-modal {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    z-index: 10000;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .captcha-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.6);
+                    backdrop-filter: blur(4px);
+                }
+                .captcha-content {
+                    position: relative;
+                    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                    border-radius: 16px;
+                    padding: 2rem;
+                    width: 90%;
+                    max-width: 360px;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    animation: captchaSlideIn 0.3s ease-out;
+                }
+                @keyframes captchaSlideIn {
+                    from {
+                        opacity: 0;
+                        transform: translateY(-20px) scale(0.95);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0) scale(1);
+                    }
+                }
+                .captcha-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                    margin-bottom: 1.5rem;
+                }
+                .captcha-header span {
+                    font-size: 1.75rem;
+                }
+                .captcha-header h3 {
+                    margin: 0;
+                    color: #fff;
+                    font-size: 1.25rem;
+                    font-weight: 600;
+                }
+                .captcha-question {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 12px;
+                    padding: 1.25rem;
+                    text-align: center;
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    color: #fff;
+                    margin-bottom: 1.25rem;
+                    letter-spacing: 0.05em;
+                    font-family: 'Courier New', monospace;
+                }
+                .captcha-input {
+                    width: 100%;
+                    height: 48px;
+                    padding: 0 1rem;
+                    font-size: 1.25rem;
+                    font-weight: 600;
+                    text-align: center;
+                    border: 2px solid rgba(255, 255, 255, 0.2);
+                    border-radius: 10px;
+                    background: rgba(255, 255, 255, 0.05);
+                    color: #fff;
+                    margin-bottom: 1rem;
+                    transition: all 0.2s ease;
+                }
+                .captcha-input:focus {
+                    outline: none;
+                    border-color: #667eea;
+                    background: rgba(255, 255, 255, 0.1);
+                }
+                .captcha-input::placeholder {
+                    color: rgba(255, 255, 255, 0.4);
+                }
+                .captcha-buttons {
+                    display: flex;
+                    gap: 0.75rem;
+                }
+                .captcha-btn {
+                    flex: 1;
+                    height: 44px;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 0.95rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                .captcha-btn.secondary {
+                    background: rgba(255, 255, 255, 0.1);
+                    color: #fff;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                }
+                .captcha-btn.secondary:hover {
+                    background: rgba(255, 255, 255, 0.15);
+                }
+                .captcha-btn.primary {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: #fff;
+                }
+                .captcha-btn.primary:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+                }
+                .captcha-error {
+                    margin: 0.75rem 0 0 0;
+                    color: #f56565;
+                    font-size: 0.875rem;
+                    text-align: center;
+                    min-height: 1.25rem;
+                }
+            </style>
+
+            <div id="status" class="status-message" role="status" aria-live="polite"></div>
+            
+            <div class="footer-link">
+                <a href="/">← 返回注册页面</a>
+            </div>
+        </div>
+    </div>
+    <script>
+        // 配置状态
+        let requireInviteCode = false;
+        let requireEmailVerification = false;
+        
+        function setStatus(message = '', isError = false) {
+            const statusElement = document.getElementById('status');
+            if (!statusElement) return;
+            statusElement.textContent = message;
+            statusElement.classList.toggle('status-error', isError);
+            statusElement.classList.toggle('status-success', !isError && message);
+        }
+
+        // 显示醒目的成功弹窗
+        function showSuccessModal(username, loginUrl) {
+            document.body.innerHTML = '';
+            
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.7);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                animation: fadeIn 0.3s ease-in-out;
+            `;
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 16px;
+                padding: 2.5rem;
+                max-width: 500px;
+                width: 90%;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+                text-align: center;
+                color: white;
+                animation: slideUp 0.4s ease-out;
+            `;
+            
+            modal.innerHTML = `
+                <div style="font-size: 4rem; margin-bottom: 1rem; animation: bounce 0.6s ease-in-out;">✅</div>
+                <h2 style="font-size: 1.75rem; font-weight: 700; margin: 0 0 1rem 0; color: white;">注册成功！</h2>
+                
+                <div style="background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px); border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;">
+                    <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 0.5rem;">您的用户名：</div>
+                    <div style="font-size: 2rem; font-weight: 700; font-family: 'Courier New', monospace; letter-spacing: 0.05em; color: #ffd700; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); word-break: break-all;">${username}</div>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, rgba(255, 59, 48, 0.95) 0%, rgba(255, 149, 0, 0.95) 100%); border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3); animation: pulse 2s ease-in-out infinite;">
+                    <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">⚠️</div>
+                    <div style="font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; color: white; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);">🔐 重要安全提示</div>
+                    <div style="background: rgba(255, 255, 255, 0.25); border: 2px dashed rgba(255, 255, 255, 0.6); border-radius: 10px; padding: 1.25rem; margin: 1rem 0;">
+                        <div style="font-size: 0.95rem; color: white; margin-bottom: 0.5rem; font-weight: 600;">您的默认密码为：</div>
+                        <div style="font-size: 2.5rem; font-weight: 900; font-family: 'Courier New', monospace; color: #FFEB3B; text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 235, 59, 0.5); letter-spacing: 0.15em; margin: 0.5rem 0;">123456</div>
+                    </div>
+                    <div style="font-size: 1.05rem; font-weight: 700; color: white; margin-top: 1rem; line-height: 1.6; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);">
+                        ⚡ 登录后第一件事：<br>请立即前往设置修改密码！
+                    </div>
+                </div>
+                
+                <div style="font-size: 0.9rem; opacity: 0.9; margin-top: 1.5rem; line-height: 1.6;">
+                    请牢记您的用户名，页面将在 10 秒后自动跳转...
+                </div>
+            `;
+            
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes slideUp {
+                    from {
+                        transform: translateY(30px);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateY(0);
+                        opacity: 1;
+                    }
+                }
+                @keyframes bounce {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.1); }
+                }
+                @keyframes pulse {
+                    0%, 100% { 
+                        transform: scale(1);
+                        box-shadow: 0 8px 24px rgba(255, 59, 48, 0.3);
+                    }
+                    50% { 
+                        transform: scale(1.02);
+                        box-shadow: 0 12px 32px rgba(255, 59, 48, 0.5);
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            setTimeout(() => {
+                window.location.href = loginUrl;
+            }, 10000);
+        }
+
+        // 加载配置
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const data = await response.json();
+                
+                requireInviteCode = data.requireInviteCode || false;
+                requireEmailVerification = data.requireEmailVerification || false;
+                
+                // 显示/隐藏相应字段
+                const inviteGroup = document.getElementById('invite-group');
+                const emailGroup = document.getElementById('email-group');
+                const emailCodeGroup = document.getElementById('email-code-group');
+                const hintInvite = document.getElementById('hint-invite');
+                const hintEmail = document.getElementById('hint-email');
+                
+                if (requireInviteCode) {
+                    inviteGroup.classList.remove('hidden');
+                    hintInvite.style.display = 'block';
+                }
+                
+                if (requireEmailVerification) {
+                    emailGroup.classList.remove('hidden');
+                    emailCodeGroup.classList.remove('hidden');
+                    hintEmail.style.display = 'block';
+                }
+                
+                // 更新标题
+                const header = document.querySelector('.invite-header p');
+                if (header) {
+                    const steps = [];
+                    if (requireEmailVerification) steps.push('邮箱验证');
+                    if (requireInviteCode) steps.push('邀请码验证');
+                    if (steps.length > 0) {
+                        header.textContent = `登录成功！请完成${steps.join('和')}以完成注册`;
+                    }
+                }
+                
+            } catch (error) {
+                console.error('加载配置失败:', error);
+            }
+        }
+
+        // 设置邮箱验证码发送
+        function setupEmailVerification() {
+            const sendCodeBtn = document.getElementById('send-code-btn');
+            const emailInput = document.getElementById('email-input');
+            const captchaModal = document.getElementById('captcha-modal');
+            const captchaQuestion = document.getElementById('captcha-question');
+            const captchaAnswer = document.getElementById('captcha-answer');
+            const captchaError = document.getElementById('captcha-error');
+            const captchaRefresh = document.getElementById('captcha-refresh');
+            const captchaSubmit = document.getElementById('captcha-submit');
+            
+            if (!sendCodeBtn || !emailInput) return;
+            
+            let countdown = 0;
+            let countdownTimer = null;
+            let currentCaptcha = null;
+            
+            function updateButtonState() {
+                if (countdown > 0) {
+                    sendCodeBtn.textContent = `${countdown}秒`;
+                    sendCodeBtn.disabled = true;
+                } else {
+                    sendCodeBtn.textContent = '发送验证码';
+                    sendCodeBtn.disabled = false;
+                }
+            }
+            
+            function startCountdown(seconds) {
+                countdown = seconds;
+                updateButtonState();
+                
+                if (countdownTimer) clearInterval(countdownTimer);
+                
+                countdownTimer = setInterval(() => {
+                    countdown--;
+                    updateButtonState();
+                    if (countdown <= 0) {
+                        clearInterval(countdownTimer);
+                        countdownTimer = null;
+                    }
+                }, 1000);
+            }
+            
+            // 生成简单的数学验证题
+            function generateCaptcha() {
+                const operators = ['+', '-', '×'];
+                const operator = operators[Math.floor(Math.random() * operators.length)];
+                let num1, num2, answer;
+                
+                switch (operator) {
+                    case '+':
+                        num1 = Math.floor(Math.random() * 50) + 1;
+                        num2 = Math.floor(Math.random() * 50) + 1;
+                        answer = num1 + num2;
+                        break;
+                    case '-':
+                        num1 = Math.floor(Math.random() * 50) + 20;
+                        num2 = Math.floor(Math.random() * 20) + 1;
+                        answer = num1 - num2;
+                        break;
+                    case '×':
+                        num1 = Math.floor(Math.random() * 9) + 2;
+                        num2 = Math.floor(Math.random() * 9) + 2;
+                        answer = num1 * num2;
+                        break;
+                }
+                
+                return {
+                    question: `${num1} ${operator} ${num2} = ?`,
+                    answer: answer
+                };
+            }
+            
+            // 显示验证码弹窗
+            function showCaptchaModal() {
+                if (!captchaModal || !captchaQuestion || !captchaAnswer) return;
+                
+                currentCaptcha = generateCaptcha();
+                captchaQuestion.textContent = currentCaptcha.question;
+                captchaAnswer.value = '';
+                captchaError.textContent = '';
+                captchaModal.style.display = 'flex';
+                
+                setTimeout(() => captchaAnswer.focus(), 100);
+            }
+            
+            // 隐藏验证码弹窗
+            function hideCaptchaModal() {
+                if (captchaModal) {
+                    captchaModal.style.display = 'none';
+                }
+                currentCaptcha = null;
+            }
+            
+            // 验证答案并发送邮件验证码
+            async function verifyCaptchaAndSendCode() {
+                if (!currentCaptcha) return;
+                
+                const userAnswer = parseInt(captchaAnswer.value.trim(), 10);
+                
+                if (isNaN(userAnswer)) {
+                    captchaError.textContent = '请输入数字答案';
+                    captchaAnswer.focus();
+                    return;
+                }
+                
+                if (userAnswer !== currentCaptcha.answer) {
+                    captchaError.textContent = '答案错误，请重试';
+                    captchaAnswer.value = '';
+                    captchaAnswer.focus();
+                    // 换一道题
+                    currentCaptcha = generateCaptcha();
+                    captchaQuestion.textContent = currentCaptcha.question;
+                    return;
+                }
+                
+                // 答案正确，隐藏弹窗并发送验证码
+                hideCaptchaModal();
+                
+                const email = emailInput.value.trim();
+                
+                sendCodeBtn.textContent = '发送中...';
+                sendCodeBtn.disabled = true;
+                
+                try {
+                    const response = await fetch('/api/email/send-code', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                        },
+                        body: JSON.stringify({ email }),
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        setStatus('验证码已发送，请查收邮箱', false);
+                        startCountdown(60);
+                        
+                        const emailCodeInput = document.getElementById('email-code-input');
+                        if (emailCodeInput) emailCodeInput.focus();
+                    } else {
+                        setStatus(data.message || '发送验证码失败', true);
+                        updateButtonState();
+                    }
+                } catch (error) {
+                    console.error('发送验证码失败:', error);
+                    setStatus('发送验证码失败，请稍后重试', true);
+                    updateButtonState();
+                }
+            }
+            
+            // 绑定事件
+            sendCodeBtn.addEventListener('click', () => {
+                const email = emailInput.value.trim();
+                
+                if (!email) {
+                    setStatus('请先输入邮箱地址', true);
+                    emailInput.focus();
+                    return;
+                }
+                
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    setStatus('邮箱格式不正确', true);
+                    emailInput.focus();
+                    return;
+                }
+                
+                // 显示人机验证弹窗
+                showCaptchaModal();
+            });
+            
+            // 刷新验证题
+            if (captchaRefresh) {
+                captchaRefresh.addEventListener('click', () => {
+                    currentCaptcha = generateCaptcha();
+                    captchaQuestion.textContent = currentCaptcha.question;
+                    captchaAnswer.value = '';
+                    captchaError.textContent = '';
+                    captchaAnswer.focus();
+                });
+            }
+            
+            // 提交验证
+            if (captchaSubmit) {
+                captchaSubmit.addEventListener('click', verifyCaptchaAndSendCode);
+            }
+            
+            // 回车提交
+            if (captchaAnswer) {
+                captchaAnswer.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        verifyCaptchaAndSendCode();
+                    }
+                });
+            }
+            
+            // 点击遮罩关闭
+            if (captchaModal) {
+                const overlay = captchaModal.querySelector('.captcha-overlay');
+                if (overlay) {
+                    overlay.addEventListener('click', hideCaptchaModal);
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadConfig();
+            setupEmailVerification();
+            
+            const form = document.getElementById('invite-form');
+            const inviteInput = document.getElementById('invite-input');
+            const emailInput = document.getElementById('email-input');
+            const submitBtn = document.getElementById('submit-btn');
+            
+            if (!form) return;
+
+            // 自动聚焦
+            setTimeout(() => {
+                if (requireEmailVerification && emailInput) {
+                    emailInput.focus();
+                } else if (requireInviteCode && inviteInput) {
+                    inviteInput.focus();
+                }
+            }, 100);
+
+            // 邀请码自动转换为大写
+            if (inviteInput) {
+                inviteInput.addEventListener('input', (e) => {
+                    e.target.value = e.target.value.toUpperCase();
+                });
+            }
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                setStatus('');
+
+                const formData = new FormData(form);
+                const inviteCode = formData.get('inviteCode');
+                const email = formData.get('email');
+                const emailCode = formData.get('emailCode');
+
+                // 验证邮箱
+                if (requireEmailVerification) {
+                    if (!email || !email.trim()) {
+                        setStatus('请输入邮箱地址', true);
+                        if (emailInput) emailInput.focus();
+                        return;
+                    }
+                    
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!emailRegex.test(email.trim())) {
+                        setStatus('邮箱格式不正确', true);
+                        if (emailInput) emailInput.focus();
+                        return;
+                    }
+                    
+                    if (!emailCode || !emailCode.trim()) {
+                        setStatus('请输入邮箱验证码', true);
+                        const emailCodeInput = document.getElementById('email-code-input');
+                        if (emailCodeInput) emailCodeInput.focus();
+                        return;
+                    }
+                }
+
+                // 验证邀请码
+                if (requireInviteCode) {
+                    if (!inviteCode || !inviteCode.trim()) {
+                        setStatus('请输入邀请码', true);
+                        if (inviteInput) inviteInput.focus();
+                        return;
+                    }
+                }
+
+                // 设置加载状态
+                submitBtn.disabled = true;
+                submitBtn.textContent = '验证中...';
+
+                try {
+                    const response = await fetch('/oauth/invite', {
+                        method: 'POST',
+                        headers: {
+                            'content-type': 'application/json',
+                            accept: 'application/json',
+                        },
+                        body: JSON.stringify({ 
+                            inviteCode: inviteCode ? inviteCode.trim().toUpperCase() : '',
+                            email: email ? email.trim() : '',
+                            emailCode: emailCode ? emailCode.trim() : '',
+                        }),
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.success) {
+                        if (data.isAlreadyRegistered && data.loginUrl) {
+                            setStatus('您已经注册过了，正在跳转...', false);
+                            setTimeout(() => {
+                                window.location.href = data.loginUrl;
+                            }, 2000);
+                            return;
+                        }
+                        
+                        setStatus(data.message || '验证失败', true);
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = '完成注册';
+                        return;
+                    }
+
+                    showSuccessModal(data.handle, data.loginUrl || '/login');
+                } catch (error) {
+                    setStatus('网络错误，请重试', true);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '完成注册';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

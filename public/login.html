@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TavernRegister 账号登录</title>
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="login.js"></script>
+</head>
+<body>
+    <main class="layout">
+        <section class="card">
+            <h1>登录账号</h1>
+            <p class="subtitle">欢迎回来，请登录您的账号。</p>
+
+            <div id="oauth-providers" class="oauth-section" style="display: none;">
+                <p class="oauth-title">第三方登录</p>
+                <div class="oauth-buttons" id="oauth-buttons"></div>
+                <div class="divider">
+                    <span>或</span>
+                </div>
+            </div>
+
+            <form id="login-form" novalidate>
+                <label class="field">
+                    <span>用户标识</span>
+                    <input type="text" name="handle" maxlength="64" required autocomplete="username" placeholder="请输入您的用户标识">
+                </label>
+
+                <label class="field">
+                    <span>密码</span>
+                    <input type="password" name="password" maxlength="128" required autocomplete="current-password" placeholder="请输入密码">
+                </label>
+
+                <button type="submit" class="primary">登录</button>
+            </form>
+
+            <p class="note">
+                还没有账号？
+                <a href="/register">立即注册</a>
+            </p>
+
+            <div id="status" role="status" aria-live="polite"></div>
+        </section>
+    </main>
+</body>
+</html>

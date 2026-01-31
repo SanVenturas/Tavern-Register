@@ -11,7 +11,7 @@
     <main class="layout">
         <section class="card">
             <h1>创建 SillyTavern 账号</h1>
-            <p class="subtitle">请填写以下信息完成注册，所有字段均为必填。</p>
+            <p class="subtitle">请填写以下信息完成注册。</p>
 
             <form id="register-form" novalidate>
 
@@ -24,27 +24,196 @@
                 <label class="field">
                     <span>用户标识</span>
                     <input type="text" name="handle" maxlength="64" required autocomplete="username" placeholder="例如：test-123">
-                    <small class="hint">将自动转换为小写短横线格式（kebab-case）。</small>
+                    <small class="hint">将自动转换为小写短横线格式（kebab-case）例如你输入的name为“test123”，则真正登录用户标识为“test-123”。</small>
                 </label>
 
                 <label class="field">
                     <span>登录密码</span>
-                    <input type="password" name="password" maxlength="128" autocomplete="new-password" placeholder="请输入密码" required>
-                    <small class="hint">请设置长度合适的密码，妥善保管。</small>
+                    <input type="password" name="password" maxlength="128" autocomplete="new-password" placeholder="请输入密码（留空则使用默认密码 123456）">
+                    <small class="hint">留空将使用默认密码 123456，登录后请第一时间修改密码。</small>
                 </label>
 
                 <label class="field">
                     <span>确认密码</span>
-                    <input type="password" name="confirm" maxlength="128" autocomplete="new-password" placeholder="再次输入密码" required>
+                    <input type="password" name="confirm" maxlength="128" autocomplete="new-password" placeholder="再次输入密码（使用默认密码可留空）">
+                    <small class="hint">如果使用默认密码，此字段可留空。</small>
+                </label>
+
+                <label class="field" id="email-field" style="display: none;">
+                    <span>邮箱地址 <span style="color: var(--error);">*</span></span>
+                    <div class="email-input-group">
+                        <input type="email" name="email" maxlength="256" autocomplete="email" placeholder="请输入邮箱地址">
+                        <button type="button" id="send-code-btn" class="secondary">发送验证码</button>
+                    </div>
+                    <small class="hint">每个邮箱只能注册一个账号。</small>
+                </label>
+
+                <!-- 人机验证弹窗 -->
+                <div id="captcha-modal" class="captcha-modal" style="display: none;">
+                    <div class="captcha-overlay"></div>
+                    <div class="captcha-content">
+                        <div class="captcha-header">
+                            <span>🔒</span>
+                            <h3>人机验证</h3>
+                        </div>
+                        <p class="captcha-question" id="captcha-question"></p>
+                        <input type="text" id="captcha-answer" class="captcha-input" placeholder="请输入答案" autocomplete="off">
+                        <div class="captcha-buttons">
+                            <button type="button" id="captcha-refresh" class="captcha-btn secondary">换一题</button>
+                            <button type="button" id="captcha-submit" class="captcha-btn primary">确认</button>
+                        </div>
+                        <p class="captcha-error" id="captcha-error"></p>
+                    </div>
+                </div>
+
+                <style>
+                    .captcha-modal {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        z-index: 10000;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .captcha-overlay {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0, 0, 0, 0.6);
+                        backdrop-filter: blur(4px);
+                    }
+                    .captcha-content {
+                        position: relative;
+                        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                        border-radius: 16px;
+                        padding: 2rem;
+                        width: 90%;
+                        max-width: 360px;
+                        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        animation: captchaSlideIn 0.3s ease-out;
+                    }
+                    @keyframes captchaSlideIn {
+                        from {
+                            opacity: 0;
+                            transform: translateY(-20px) scale(0.95);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateY(0) scale(1);
+                        }
+                    }
+                    .captcha-header {
+                        display: flex;
+                        align-items: center;
+                        gap: 0.75rem;
+                        margin-bottom: 1.5rem;
+                    }
+                    .captcha-header span {
+                        font-size: 1.75rem;
+                    }
+                    .captcha-header h3 {
+                        margin: 0;
+                        color: #fff;
+                        font-size: 1.25rem;
+                        font-weight: 600;
+                    }
+                    .captcha-question {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        border-radius: 12px;
+                        padding: 1.25rem;
+                        text-align: center;
+                        font-size: 1.5rem;
+                        font-weight: 700;
+                        color: #fff;
+                        margin-bottom: 1.25rem;
+                        letter-spacing: 0.05em;
+                        font-family: 'Courier New', monospace;
+                    }
+                    .captcha-input {
+                        width: 100%;
+                        height: 48px;
+                        padding: 0 1rem;
+                        font-size: 1.25rem;
+                        font-weight: 600;
+                        text-align: center;
+                        border: 2px solid rgba(255, 255, 255, 0.2);
+                        border-radius: 10px;
+                        background: rgba(255, 255, 255, 0.05);
+                        color: #fff;
+                        margin-bottom: 1rem;
+                        transition: all 0.2s ease;
+                    }
+                    .captcha-input:focus {
+                        outline: none;
+                        border-color: #667eea;
+                        background: rgba(255, 255, 255, 0.1);
+                    }
+                    .captcha-input::placeholder {
+                        color: rgba(255, 255, 255, 0.4);
+                    }
+                    .captcha-buttons {
+                        display: flex;
+                        gap: 0.75rem;
+                    }
+                    .captcha-btn {
+                        flex: 1;
+                        height: 44px;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 0.95rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    }
+                    .captcha-btn.secondary {
+                        background: rgba(255, 255, 255, 0.1);
+                        color: #fff;
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                    }
+                    .captcha-btn.secondary:hover {
+                        background: rgba(255, 255, 255, 0.15);
+                    }
+                    .captcha-btn.primary {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: #fff;
+                    }
+                    .captcha-btn.primary:hover {
+                        transform: translateY(-1px);
+                        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+                    }
+                    .captcha-error {
+                        margin: 0.75rem 0 0 0;
+                        color: #f56565;
+                        font-size: 0.875rem;
+                        text-align: center;
+                        min-height: 1.25rem;
+                    }
+                </style>
+
+                <label class="field" id="email-code-field" style="display: none;">
+                    <span>邮箱验证码 <span style="color: var(--error);">*</span></span>
+                    <input type="text" name="emailCode" maxlength="6" autocomplete="off" placeholder="请输入6位验证码" style="letter-spacing: 0.2em;">
+                    <small class="hint">验证码已发送至您的邮箱，有效期10分钟。</small>
+                </label>
+
+                <label class="field" id="invite-code-field" style="display: none;">
+                    <span>邀请码 <span style="color: var(--error);">*</span></span>
+                    <input type="text" name="inviteCode" maxlength="32" autocomplete="off" placeholder="请输入邀请码" style="text-transform: uppercase;">
+                    <small class="hint">注册需要有效的邀请码。</small>
                 </label>
 
                 <button type="submit" class="primary">立即注册</button>
             </form>
 
             <p class="note">
-                注册成功后可前往
-                <a id="login-link" href="#" target="_blank" rel="noopener">SillyTavern 登录页</a>
-                完成登录。
+                已有账号？
+                <a href="/login">立即登录</a>
             </p>
 
             <div id="status" role="status" aria-live="polite"></div>
