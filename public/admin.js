@@ -373,7 +373,7 @@ async function loadServers() {
         if (!tbody) return;
 
         if (result.servers.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center;">暂无服务器</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" style="text-align: center;">暂无服务器</td></tr>';
             return;
         }
 
@@ -385,6 +385,7 @@ async function loadServers() {
                 <td>${server.description || '-'}</td>
                 <td>${server.provider || '-'}</td>
                 <td>${server.maintainer || '-'}</td>
+                <td>${server.storageLimitValue ? `${server.storageLimitValue}${String(server.storageLimitUnit || 'MB').toUpperCase()}` : '-'}</td>
                 <td>${typeof server.registeredUserCount === 'number' ? server.registeredUserCount : '-'}</td>
                 <td>
                     <span class="badge ${server.isActive ? 'badge-success' : 'badge-error'}">
@@ -1233,6 +1234,10 @@ async function editServer(id) {
         form.elements['maintainer'].value = server.maintainer || '';
         form.elements['contact'].value = server.contact || '';
         form.elements['announcement'].value = server.announcement || '';
+        form.elements['storageLimitValue'].value = server.storageLimitValue ?? '';
+        form.elements['storageLimitUnit'].value = (server.storageLimitUnit || 'mb').toLowerCase();
+        form.elements['localDataRoot'].value = server.localDataRoot || '';
+        form.elements['storageCheckIntervalMinutes'].value = server.storageCheckIntervalMinutes ?? '';
         
         // 设置注册暂停状态（如果有复选框）
         const registrationPausedInput = form.elements['registrationPaused'];

@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import session from 'express-session';
 import path from 'node:path';
+import { promises as fsPromises } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from './config.js';
@@ -28,6 +29,123 @@ setInterval(() => {
     loginLimiter.cleanup();
     cleanupVerificationCodes(); // 清理过期验证码
 }, 60 * 60 * 1000);
+
+const STORAGE_LIMIT_CHECK_INTERVAL = 60 * 1000;
+const storageCheckState = new Map();
+
+async function getDirectorySize(targetPath) {
+    try {
+        const stat = await fsPromises.stat(targetPath);
+        if (!stat.isDirectory()) {
+            return stat.size;
+        }
+
+        const entries = await fsPromises.readdir(targetPath, { withFileTypes: true });
+        let total = 0;
+        for (const entry of entries) {
+            const entryPath = path.join(targetPath, entry.name);
+            if (entry.isDirectory()) {
+                total += await getDirectorySize(entryPath);
+            } else if (entry.isFile()) {
+                const fileStat = await fsPromises.stat(entryPath);
+                total += fileStat.size;
+            }
+        }
+        return total;
+    } catch (error) {
+        if (error?.code === 'ENOENT') {
+            return 0;
+        }
+        throw error;
+    }
+}
+
+function resolveStorageLimitBytes(value, unit) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+        return null;
+    }
+
+    const normalizedUnit = String(unit ?? 'mb').toLowerCase();
+    const multiplier = normalizedUnit === 'gb' ? 1024 ** 3 : 1024 ** 2;
+    return Math.round(numeric * multiplier);
+}
+
+async function enforceStorageLimits() {
+    try {
+        const servers = DataStore.getServers();
+        if (!servers.length) {
+            return;
+        }
+
+        const users = DataStore.getUsers();
+
+        for (const server of servers) {
+            if (!server.storageLimitBytes || !server.localDataRoot) {
+                continue;
+            }
+
+            const intervalMinutes = Number(server.storageCheckIntervalMinutes ?? 5);
+            const intervalMs = Number.isFinite(intervalMinutes) && intervalMinutes > 0
+                ? intervalMinutes * 60 * 1000
+                : 5 * 60 * 1000;
+            const lastChecked = storageCheckState.get(server.id) || 0;
+            if (Date.now() - lastChecked < intervalMs) {
+                continue;
+            }
+            storageCheckState.set(server.id, Date.now());
+
+            const serverUsers = users.filter(u => Number(u.serverId) === Number(server.id));
+            if (!serverUsers.length) {
+                continue;
+            }
+
+            const client = new SillyTavernClient({
+                baseUrl: server.url,
+                adminHandle: server.admin_username,
+                adminPassword: server.admin_password,
+            });
+
+            for (const user of serverUsers) {
+                const normalizedHandle = client.normalizeHandle(user.handle);
+                if (!normalizedHandle) {
+                    continue;
+                }
+
+                const userRoot = path.join(server.localDataRoot, normalizedHandle);
+                let usageBytes = 0;
+                try {
+                    usageBytes = await getDirectorySize(userRoot);
+                } catch (error) {
+                    console.error('读取用户目录大小失败:', normalizedHandle, error?.message || error);
+                    continue;
+                }
+
+                DataStore.updateUser(normalizedHandle, {
+                    lastQuotaUsageBytes: usageBytes,
+                    lastQuotaCheckedAt: new Date().toISOString(),
+                });
+
+                if (usageBytes >= server.storageLimitBytes) {
+                    try {
+                        await client.disableUser({ handle: normalizedHandle });
+                        DataStore.updateUser(normalizedHandle, {
+                            quotaDisabledAt: new Date().toISOString(),
+                        });
+                    } catch (error) {
+                        console.error('禁用超限用户失败:', normalizedHandle, error?.message || error);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('执行存储限额检查失败:', error?.message || error);
+    }
+}
+
+setInterval(() => {
+    enforceStorageLimits();
+}, STORAGE_LIMIT_CHECK_INTERVAL);
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -1163,11 +1281,25 @@ app.post('/api/admin/servers', requireAdminAuth(config), async (req, res) => {
              return res.status(400).json({ success: false, message: `连接失败: ${testResult.message}` });
         }
 
+        const rawLimitValue = req.body.storageLimitValue;
+        const normalizedLimitValue = rawLimitValue === '' || rawLimitValue === null || rawLimitValue === undefined
+            ? null
+            : Number(rawLimitValue);
+        const storageLimitBytes = resolveStorageLimitBytes(normalizedLimitValue, req.body.storageLimitUnit);
+        const rawIntervalValue = req.body.storageCheckIntervalMinutes;
+        const normalizedInterval = rawIntervalValue === '' || rawIntervalValue === null || rawIntervalValue === undefined
+            ? 5
+            : Number(rawIntervalValue);
         const newServer = DataStore.addServer({
             name,
             url,
             admin_username,
             admin_password, // 注意：生产环境应加密存储
+            localDataRoot: typeof req.body.localDataRoot === 'string' ? req.body.localDataRoot.trim() : '',
+            storageLimitValue: normalizedLimitValue,
+            storageLimitUnit: req.body.storageLimitUnit || 'mb',
+            storageLimitBytes,
+            storageCheckIntervalMinutes: Number.isFinite(normalizedInterval) && normalizedInterval > 0 ? normalizedInterval : 5,
             description,
             provider,
             maintainer,
@@ -1228,6 +1360,26 @@ app.put('/api/admin/servers/:id', requireAdminAuth(config), async (req, res) => 
         if (req.body.maintainer !== undefined) updates.maintainer = req.body.maintainer;
         if (req.body.contact !== undefined) updates.contact = req.body.contact;
         if (req.body.announcement !== undefined) updates.announcement = req.body.announcement;
+        if (req.body.localDataRoot !== undefined) {
+            updates.localDataRoot = typeof req.body.localDataRoot === 'string' ? req.body.localDataRoot.trim() : '';
+        }
+        if (req.body.storageLimitValue !== undefined || req.body.storageLimitUnit !== undefined) {
+            const rawLimitValue = req.body.storageLimitValue;
+            const normalizedLimitValue = rawLimitValue === '' || rawLimitValue === null || rawLimitValue === undefined
+                ? null
+                : Number(rawLimitValue);
+            const storageLimitBytes = resolveStorageLimitBytes(normalizedLimitValue, req.body.storageLimitUnit);
+            updates.storageLimitValue = normalizedLimitValue;
+            updates.storageLimitUnit = req.body.storageLimitUnit || 'mb';
+            updates.storageLimitBytes = storageLimitBytes;
+        }
+        if (req.body.storageCheckIntervalMinutes !== undefined) {
+            const rawIntervalValue = req.body.storageCheckIntervalMinutes;
+            const normalizedInterval = rawIntervalValue === '' || rawIntervalValue === null || rawIntervalValue === undefined
+                ? 5
+                : Number(rawIntervalValue);
+            updates.storageCheckIntervalMinutes = Number.isFinite(normalizedInterval) && normalizedInterval > 0 ? normalizedInterval : 5;
+        }
         
         // 如果更改了连接信息，验证连接
         if (updates.url || updates.admin_username || updates.admin_password) {

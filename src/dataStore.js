@@ -152,6 +152,11 @@ export class DataStore {
             url: serverInfo.url,
             admin_username: serverInfo.admin_username,
             admin_password: serverInfo.admin_password,
+            localDataRoot: serverInfo.localDataRoot || '',
+            storageLimitValue: serverInfo.storageLimitValue ?? null,
+            storageLimitUnit: serverInfo.storageLimitUnit || 'mb',
+            storageLimitBytes: serverInfo.storageLimitBytes ?? null,
+            storageCheckIntervalMinutes: serverInfo.storageCheckIntervalMinutes ?? 5,
             // 展示信息（可选）
             description: serverInfo.description || '',      // 服务器描述
             provider: serverInfo.provider || '',          // 服务器提供方
@@ -176,6 +181,11 @@ export class DataStore {
         return servers.map(s => ({
             ...s,
             registrationPaused: s.registrationPaused === true,
+            localDataRoot: s.localDataRoot || '',
+            storageLimitValue: s.storageLimitValue ?? null,
+            storageLimitUnit: s.storageLimitUnit || 'mb',
+            storageLimitBytes: s.storageLimitBytes ?? null,
+            storageCheckIntervalMinutes: s.storageCheckIntervalMinutes ?? 5,
         }));
     }
 
@@ -202,6 +212,11 @@ export class DataStore {
         return server ? {
             ...server,
             registrationPaused: server.registrationPaused === true,
+            localDataRoot: server.localDataRoot || '',
+            storageLimitValue: server.storageLimitValue ?? null,
+            storageLimitUnit: server.storageLimitUnit || 'mb',
+            storageLimitBytes: server.storageLimitBytes ?? null,
+            storageCheckIntervalMinutes: server.storageCheckIntervalMinutes ?? 5,
         } : null;
     }
 

@@ -590,6 +590,34 @@
                                 <textarea name="announcement" rows="3" placeholder="例如：服务器维护时间、规则说明等" style="width: 100%; resize: vertical;"></textarea>
                             </label>
                         </div>
+                        <div class="form-row">
+                            <label class="field">
+                                <span>每账户空间限额（可选）</span>
+                                <input type="number" name="storageLimitValue" min="1" placeholder="例如：500">
+                            </label>
+                            <label class="field">
+                                <span>单位</span>
+                                <select name="storageLimitUnit">
+                                    <option value="mb" selected>MB</option>
+                                    <option value="gb">GB</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field">
+                                <span>检查间隔（分钟）</span>
+                                <input type="number" name="storageCheckIntervalMinutes" min="1" placeholder="默认 5">
+                            </label>
+                            <label class="field" style="grid-column: 1 / -1;">
+                                <small style="color: rgba(240, 244, 255, 0.6);">仅当注册门户与本体在同一服务器时可用；达到限额后将自动禁用账户。</small>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field" style="grid-column: 1 / -1;">
+                                <span>SillyTavern 数据目录（同机必填）</span>
+                                <input type="text" name="localDataRoot" placeholder="例如：E:\\2\\SillyTavern\\data">
+                            </label>
+                        </div>
                         <div style="display: flex; gap: 1rem;">
                             <button type="button" class="secondary" id="test-connection-btn">测试连接</button>
                             <button type="submit" class="primary">添加服务器</button>
@@ -607,6 +635,7 @@
                                 <th>描述</th>
                                 <th>提供方</th>
                                 <th>维护者</th>
+                                <th>每账户限额</th>
                                 <th>已注册用户</th>
                                 <th>状态</th>
                                 <th>注册状态</th>
@@ -744,6 +773,34 @@
                         <label class="field" style="grid-column: 1 / -1;">
                             <span>服务器公告（可选）</span>
                             <textarea name="announcement" rows="3" placeholder="例如：服务器维护时间、规则说明等" style="width: 100%; resize: vertical;"></textarea>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field">
+                            <span>每账户空间限额（可选）</span>
+                            <input type="number" name="storageLimitValue" min="1" placeholder="例如：500">
+                        </label>
+                        <label class="field">
+                            <span>单位</span>
+                            <select name="storageLimitUnit">
+                                <option value="mb" selected>MB</option>
+                                <option value="gb">GB</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field">
+                            <span>检查间隔（分钟）</span>
+                            <input type="number" name="storageCheckIntervalMinutes" min="1" placeholder="默认 5">
+                        </label>
+                        <label class="field" style="grid-column: 1 / -1;">
+                            <small style="color: rgba(240, 244, 255, 0.6);">仅当注册门户与本体在同一服务器时可用；达到限额后将自动禁用账户。</small>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="field" style="grid-column: 1 / -1;">
+                            <span>SillyTavern 数据目录（同机必填）</span>
+                            <input type="text" name="localDataRoot" placeholder="例如：E:\\2\\SillyTavern\\data">
                         </label>
                     </div>
                     <div class="form-row">
