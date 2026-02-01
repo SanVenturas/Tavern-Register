@@ -225,6 +225,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData(addServerForm);
             const data = Object.fromEntries(formData.entries());
 
+            data.localDataRoot = typeof data.localDataRoot === 'string' ? data.localDataRoot.trim() : '';
+            data.storageLimitValue = data.storageLimitValue === '' ? null : Number(data.storageLimitValue);
+            data.storageCheckIntervalMinutes = data.storageCheckIntervalMinutes === '' ? null : Number(data.storageCheckIntervalMinutes);
+            if (Number.isNaN(data.storageLimitValue)) {
+                data.storageLimitValue = null;
+            }
+            if (Number.isNaN(data.storageCheckIntervalMinutes)) {
+                data.storageCheckIntervalMinutes = null;
+            }
+
             try {
                 const response = await fetch('/api/admin/servers', {
                     method: 'POST',
@@ -308,6 +318,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 处理注册暂停状态（复选框）
             data.registrationPaused = data.registrationPaused === 'on' || data.registrationPaused === true;
+
+            // 处理仅同机可用配置
+            data.localDataRoot = typeof data.localDataRoot === 'string' ? data.localDataRoot.trim() : '';
+            data.storageLimitValue = data.storageLimitValue === '' ? null : Number(data.storageLimitValue);
+            data.storageCheckIntervalMinutes = data.storageCheckIntervalMinutes === '' ? null : Number(data.storageCheckIntervalMinutes);
+            if (Number.isNaN(data.storageLimitValue)) {
+                data.storageLimitValue = null;
+            }
+            if (Number.isNaN(data.storageCheckIntervalMinutes)) {
+                data.storageCheckIntervalMinutes = null;
+            }
 
             try {
                 const response = await fetch(`/api/admin/servers/${id}`, {
