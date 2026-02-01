@@ -1422,6 +1422,9 @@ app.get('/api/admin/servers', requireAdminAuth(config), (req, res) => {
                 id: serverNumericId,
                 registeredUserCount,
                 registrationPaused: s.registrationPaused === true,  // 确保返回布尔值，兼容旧数据
+                storageLimitValue: s.storageLimitValue ?? null,
+                storageLimitUnit: s.storageLimitUnit || 'mb',
+                storageCheckIntervalMinutes: s.storageCheckIntervalMinutes ?? 5,
             };
         });
 
