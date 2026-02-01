@@ -496,8 +496,8 @@
             </div>
 
             <div id="users-tab" class="tab-content active">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0.5rem;">
-                    <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0.5rem; flex-wrap: wrap; gap: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                         <label style="display: flex; align-items: center; gap: 0.5rem;">
                             <span>每页显示：</span>
                             <select id="users-limit" onchange="changeUsersPage(1)">
@@ -507,6 +507,13 @@
                                 <option value="100">100</option>
                             </select>
                         </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span>同步服务器：</span>
+                            <select id="users-sync-server">
+                                <option value="all">全部服务器</option>
+                            </select>
+                        </label>
+                        <button type="button" class="primary" id="sync-users-btn">同步用户</button>
                     </div>
                     <div id="users-pagination-info" style="color: rgba(240, 244, 255, 0.7);"></div>
                 </div>
@@ -518,9 +525,11 @@
                                 <th>用户名</th>
                                 <th>显示名称</th>
                                 <th>注册方式</th>
+                                <th>服务器</th>
                                 <th>邀请码</th>
                                 <th>IP 地址</th>
                                 <th>注册时间</th>
+                                <th>操作</th>
                             </tr>
                         </thead>
                         <tbody id="users-tbody"></tbody>

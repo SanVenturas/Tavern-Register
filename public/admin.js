@@ -22,6 +22,7 @@ function formatRegistrationMethod(method) {
         'oauth:github': { text: 'GitHub注册', class: 'badge-github' },
         'oauth:linuxdo': { text: 'Linux.do注册', class: 'badge-linuxdo' },
         'oauth:discord': { text: 'Discord注册', class: 'badge-discord' },
+        'synced': { text: '同步用户', class: 'badge-oauth' },
     };
     
     // 如果没有提供方法，默认为手动注册
@@ -41,6 +42,21 @@ function formatRegistrationMethod(method) {
     
     // 返回匹配的映射或默认值
     return methodMap[method] || { text: method, class: 'badge-default' };
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text ?? '';
+    return div.innerHTML;
+}
+
+function escapeAttr(text) {
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -328,6 +344,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    const syncUsersBtn = document.getElementById('sync-users-btn');
+    if (syncUsersBtn) {
+        syncUsersBtn.addEventListener('click', async () => {
+            await syncUsersFromServers();
+        });
+    }
+
+    loadUsersSyncServers();
 });
 
 async function loadServers() {
@@ -520,22 +545,31 @@ async function loadUsers() {
                 loadUsers();
                 return;
             }
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">暂无用户</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">暂无用户</td></tr>';
             renderUsersPagination(result.pagination);
             return;
         }
 
         tbody.innerHTML = result.users.map(user => {
             const methodInfo = formatRegistrationMethod(user.registrationMethod);
+            const safeHandle = escapeHtml(user.handle);
+            const safeHandleAttr = escapeAttr(user.handle);
+            const safeName = escapeHtml(user.name || '-');
+            const safeServerName = escapeHtml(user.serverName || '-');
+            const hasServer = !!user.serverId;
+            const changeBtn = `<button class="action-btn" ${hasServer ? '' : 'disabled'} onclick="changeUserPassword('${safeHandleAttr}', ${hasServer ? Number(user.serverId) : 'null'})">改密</button>`;
+            const deleteBtn = `<button class="action-btn btn-danger" ${hasServer ? '' : 'disabled'} onclick="deleteRemoteUser('${safeHandleAttr}', ${hasServer ? Number(user.serverId) : 'null'})">删除</button>`;
             return `
             <tr>
                 <td>${user.id || '-'}</td>
-                <td>${user.handle}</td>
-                <td>${user.name || '-'}</td>
+                <td>${safeHandle}</td>
+                <td>${safeName}</td>
                 <td><span class="badge ${methodInfo.class}">${methodInfo.text}</span></td>
+                <td>${safeServerName}</td>
                 <td>${user.inviteCode || '-'}</td>
                 <td>${formatIP(user.ip)}</td>
                 <td>${formatDate(user.registeredAt)}</td>
+                <td>${changeBtn} ${deleteBtn}</td>
             </tr>
         `;
         }).join('');
@@ -543,6 +577,127 @@ async function loadUsers() {
         renderUsersPagination(result.pagination);
     } catch (error) {
         console.error('加载用户列表失败:', error);
+    }
+}
+
+async function loadUsersSyncServers() {
+    const select = document.getElementById('users-sync-server');
+    if (!select) return;
+
+    try {
+        const response = await fetch('/api/admin/servers', {
+            headers: { accept: 'application/json' },
+        });
+
+        if (!response.ok) return;
+
+        const result = await response.json();
+        if (!result.success) return;
+
+        const currentValue = select.value || 'all';
+        const options = ['<option value="all">全部服务器</option>'];
+        for (const server of result.servers) {
+            options.push(`<option value="${escapeAttr(server.id)}">${escapeHtml(server.name || `服务器 ${server.id}`)}</option>`);
+        }
+        select.innerHTML = options.join('');
+        select.value = options.some(o => o.includes(`value="${escapeAttr(currentValue)}"`)) ? currentValue : 'all';
+    } catch (error) {
+        console.error('加载同步服务器列表失败:', error);
+    }
+}
+
+async function syncUsersFromServers() {
+    const select = document.getElementById('users-sync-server');
+    const serverId = select && select.value !== 'all' ? Number(select.value) : null;
+
+    setStatus('正在同步用户...', false);
+
+    try {
+        const response = await fetch('/api/admin/users/sync', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                accept: 'application/json',
+            },
+            body: JSON.stringify({ serverId }),
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            setStatus(result.message || '同步失败', true);
+            return;
+        }
+
+        const summary = result.summary;
+        setStatus(`同步完成：服务器 ${summary.syncedServers}/${summary.totalServers}，新增 ${summary.added}，更新 ${summary.updated}`, false);
+        loadUsers();
+    } catch (error) {
+        setStatus('同步失败，请稍后再试', true);
+    }
+}
+
+async function deleteRemoteUser(handle, serverId) {
+    if (!serverId) {
+        setStatus('该用户未绑定服务器，无法删除', true);
+        return;
+    }
+
+    if (!confirm(`确定要删除用户 ${handle} 吗？此操作会删除远端账户。`)) return;
+    const purge = confirm('是否同时清理该用户的远端数据目录？');
+
+    try {
+        const response = await fetch('/api/admin/users/delete-remote', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                accept: 'application/json',
+            },
+            body: JSON.stringify({ handle, serverId, purge }),
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            setStatus(result.message || '删除失败', true);
+            return;
+        }
+
+        setStatus(`已删除用户 ${handle}`, false);
+        loadUsers();
+    } catch (error) {
+        setStatus('删除失败，请稍后再试', true);
+    }
+}
+
+async function changeUserPassword(handle, serverId) {
+    if (!serverId) {
+        setStatus('该用户未绑定服务器，无法修改密码', true);
+        return;
+    }
+
+    const newPassword = prompt(`请输入用户 ${handle} 的新密码：`);
+    if (!newPassword) return;
+
+    if (!confirm(`确认将用户 ${handle} 的密码修改为新密码？`)) return;
+
+    try {
+        const response = await fetch('/api/admin/users/change-password-remote', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                accept: 'application/json',
+            },
+            body: JSON.stringify({ handle, serverId, newPassword }),
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            setStatus(result.message || '改密失败', true);
+            return;
+        }
+
+        setStatus(`已修改用户 ${handle} 的密码`, false);
+    } catch (error) {
+        setStatus('改密失败，请稍后再试', true);
     }
 }
 

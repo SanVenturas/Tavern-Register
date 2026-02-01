@@ -978,6 +978,135 @@ app.get('/api/admin/users', requireAdminAuth(config), (req, res) => {
     }
 });
 
+// 同步 SillyTavern 用户到本地记录
+app.post('/api/admin/users/sync', requireAdminAuth(config), async (req, res) => {
+    try {
+        const { serverId } = req.body ?? {};
+        const servers = serverId ? [DataStore.getServerById(serverId)].filter(Boolean) : DataStore.getServers();
+
+        if (!servers.length) {
+            return res.status(404).json({ success: false, message: '未找到可用服务器' });
+        }
+
+        const summary = {
+            totalServers: servers.length,
+            syncedServers: 0,
+            totalRemoteUsers: 0,
+            added: 0,
+            updated: 0,
+            errors: [],
+        };
+
+        for (const server of servers) {
+            try {
+                const client = new SillyTavernClient({
+                    baseUrl: server.url,
+                    adminHandle: server.admin_username,
+                    adminPassword: server.admin_password,
+                });
+
+                const remoteUsers = await client.listUsers();
+                summary.totalRemoteUsers += remoteUsers.length;
+
+                for (const remote of remoteUsers) {
+                    const handle = client.normalizeHandle(remote.handle);
+                    if (!handle) {
+                        continue;
+                    }
+
+                    const existing = DataStore.getUserByHandle(handle);
+                    if (existing) {
+                        DataStore.updateUser(handle, {
+                            name: remote.name || existing.name,
+                            serverId: existing.serverId ?? server.id,
+                            registrationStatus: existing.registrationStatus || 'active',
+                            syncedAt: new Date().toISOString(),
+                            remoteCreatedAt: remote.created ?? existing.remoteCreatedAt,
+                        });
+                        summary.updated += 1;
+                    } else {
+                        DataStore.recordUser({
+                            handle,
+                            name: remote.name || handle,
+                            registrationMethod: 'synced',
+                            registrationStatus: 'active',
+                            serverId: server.id,
+                            syncedAt: new Date().toISOString(),
+                            remoteCreatedAt: remote.created ?? null,
+                        });
+                        summary.added += 1;
+                    }
+                }
+
+                summary.syncedServers += 1;
+            } catch (error) {
+                summary.errors.push({
+                    serverId: server.id,
+                    serverName: server.name,
+                    message: error?.message || '同步失败',
+                });
+            }
+        }
+
+        res.json({ success: summary.errors.length === 0, summary });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message || '同步用户失败' });
+    }
+});
+
+// 删除 SillyTavern 用户
+app.post('/api/admin/users/delete-remote', requireAdminAuth(config), async (req, res) => {
+    try {
+        const { handle, serverId, purge } = req.body ?? {};
+        if (!handle || !serverId) {
+            return res.status(400).json({ success: false, message: '缺少必要参数' });
+        }
+
+        const server = DataStore.getServerById(serverId);
+        if (!server) {
+            return res.status(404).json({ success: false, message: '服务器不存在' });
+        }
+
+        const client = new SillyTavernClient({
+            baseUrl: server.url,
+            adminHandle: server.admin_username,
+            adminPassword: server.admin_password,
+        });
+
+        await client.deleteUser({ handle, purge: !!purge });
+        DataStore.deleteUser(client.normalizeHandle(handle));
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message || '删除用户失败' });
+    }
+});
+
+// 修改 SillyTavern 用户密码
+app.post('/api/admin/users/change-password-remote', requireAdminAuth(config), async (req, res) => {
+    try {
+        const { handle, serverId, newPassword } = req.body ?? {};
+        if (!handle || !serverId || !newPassword) {
+            return res.status(400).json({ success: false, message: '缺少必要参数' });
+        }
+
+        const server = DataStore.getServerById(serverId);
+        if (!server) {
+            return res.status(404).json({ success: false, message: '服务器不存在' });
+        }
+
+        const client = new SillyTavernClient({
+            baseUrl: server.url,
+            adminHandle: server.admin_username,
+            adminPassword: server.admin_password,
+        });
+
+        await client.changePassword({ handle, newPassword });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message || '修改密码失败' });
+    }
+});
+
 // 获取服务器列表（管理员用）
 app.get('/api/admin/servers', requireAdminAuth(config), (req, res) => {
     try {

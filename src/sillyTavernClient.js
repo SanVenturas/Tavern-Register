@@ -140,6 +140,110 @@ export class SillyTavernClient {
         };
     }
 
+    async listUsers() {
+        const session = await this.#loginAsAdmin();
+        const listContext = await this.#fetchCsrfToken(session.cookie);
+        const authCookie = listContext.cookie ?? session.cookie;
+
+        const headers = {
+            'accept': 'application/json',
+            'x-csrf-token': listContext.csrfToken,
+        };
+
+        if (authCookie) {
+            headers.cookie = authCookie;
+        }
+
+        const response = await fetch(`${this.baseUrl}/api/users/get`, {
+            method: 'POST',
+            headers,
+        });
+
+        if (!response.ok) {
+            const message = await this.#safeReadError(response);
+            throw new Error(`获取用户列表失败：${response.status} ${message}`);
+        }
+
+        const data = /** @type {Record<string, any>[]} */ (await response.json());
+        return data;
+    }
+
+    async deleteUser({ handle, purge = false }) {
+        if (!handle) {
+            throw new Error('用户标识不能为空');
+        }
+
+        const normalizedHandle = this.normalizeHandle(handle);
+        if (!normalizedHandle) {
+            throw new Error('无法将该用户标识转换为有效格式');
+        }
+
+        const session = await this.#loginAsAdmin();
+        const deleteContext = await this.#fetchCsrfToken(session.cookie);
+        const authCookie = deleteContext.cookie ?? session.cookie;
+
+        const headers = {
+            'content-type': 'application/json',
+            'accept': 'application/json',
+            'x-csrf-token': deleteContext.csrfToken,
+        };
+
+        if (authCookie) {
+            headers.cookie = authCookie;
+        }
+
+        const response = await fetch(`${this.baseUrl}/api/users/delete`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ handle: normalizedHandle, purge: !!purge }),
+        });
+
+        if (!response.ok) {
+            const message = await this.#safeReadError(response);
+            throw new Error(`删除用户失败：${response.status} ${message}`);
+        }
+    }
+
+    async changePassword({ handle, newPassword }) {
+        if (!handle) {
+            throw new Error('用户标识不能为空');
+        }
+
+        if (!newPassword) {
+            throw new Error('新密码不能为空');
+        }
+
+        const normalizedHandle = this.normalizeHandle(handle);
+        if (!normalizedHandle) {
+            throw new Error('无法将该用户标识转换为有效格式');
+        }
+
+        const session = await this.#loginAsAdmin();
+        const updateContext = await this.#fetchCsrfToken(session.cookie);
+        const authCookie = updateContext.cookie ?? session.cookie;
+
+        const headers = {
+            'content-type': 'application/json',
+            'accept': 'application/json',
+            'x-csrf-token': updateContext.csrfToken,
+        };
+
+        if (authCookie) {
+            headers.cookie = authCookie;
+        }
+
+        const response = await fetch(`${this.baseUrl}/api/users/change-password`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ handle: normalizedHandle, newPassword }),
+        });
+
+        if (!response.ok) {
+            const message = await this.#safeReadError(response);
+            throw new Error(`修改密码失败：${response.status} ${message}`);
+        }
+    }
+
     async #loginAsAdmin() {
         const session = await this.#fetchCsrfToken();
 

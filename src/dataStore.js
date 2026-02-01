@@ -76,6 +76,16 @@ export class DataStore {
     }
 
     /**
+     * 删除用户
+     */
+    static deleteUser(handle) {
+        const users = readJsonFile(USERS_FILE, []);
+        const filtered = users.filter(u => u.handle !== handle);
+        writeJsonFile(USERS_FILE, filtered);
+        return filtered.length < users.length;
+    }
+
+    /**
      * 获取所有注册用户
      */
     static getUsers() {
