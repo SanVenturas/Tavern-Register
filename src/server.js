@@ -75,7 +75,7 @@ app.use(session({
 const publicDir = path.join(__dirname, '../public');
 const indexHtmlPath = path.join(publicDir, 'index.html');
 const registerHtmlPath = path.join(publicDir, 'register.html');
-const selectServerHtmlPath = path.join(publicDir, 'select-server.html');
+const userPanelHtmlPath = path.join(publicDir, 'user-panel.html');
 const loginHtmlPath = path.join(publicDir, 'login.html');
 
 app.get('/health', (_req, res) => {
@@ -141,14 +141,14 @@ function sendRegisterPage(res) {
 
 app.get('/', (req, res) => {
     if (req.session.userHandle) {
-        return res.redirect('/select-server');
+        return res.redirect('/user-panel');
     }
     res.redirect('/login');
 });
 
 app.get('/login', (req, res) => {
     if (req.session.userHandle) {
-        return res.redirect('/select-server');
+        return res.redirect('/user-panel');
     }
     res.sendFile(loginHtmlPath);
 });
@@ -183,19 +183,24 @@ app.post('/api/login', (req, res) => {
     }
 
     req.session.userHandle = user.handle;
-    res.json({ success: true, redirectUrl: '/select-server' });
+    req.session.userPassword = password;
+    res.json({ success: true, redirectUrl: '/user-panel' });
 });
 
 app.get('/register', (_req, res) => {
     sendRegisterPage(res);
 });
 
-app.get('/select-server', (req, res) => {
+app.get('/user-panel', (req, res) => {
     // 允许已登录用户或正在注册流程中的用户
     if (!req.session.userHandle && !req.session.pendingUserHandle) {
         return res.redirect('/login');
     }
-    res.sendFile(selectServerHtmlPath);
+    res.sendFile(userPanelHtmlPath);
+});
+
+app.get('/select-server', (req, res) => {
+    return res.redirect('/user-panel');
 });
 
 app.post('/register', async (req, res) => {
@@ -324,11 +329,12 @@ app.post('/register', async (req, res) => {
 
         // 设置 session，用于后续选服
         req.session.pendingUserHandle = newUser.handle;
+        req.session.pendingUserPassword = finalPassword;
 
         res.status(201).json({
             success: true,
             handle: newUser.handle,
-            redirectUrl: '/select-server',
+            redirectUrl: '/user-panel',
             message: '账号创建成功，请选择服务器',
         });
     } catch (error) {
@@ -414,6 +420,16 @@ app.get('/api/user/status', (req, res) => {
     });
 });
 
+// 用户登出
+app.post('/api/user/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({ success: false, message: '登出失败' });
+        }
+        res.json({ success: true });
+    });
+});
+
 // 绑定服务器并远程注册
 app.post('/api/users/bind-server', async (req, res) => {
     const { serverId } = req.body;
@@ -485,6 +501,107 @@ app.post('/api/users/bind-server', async (req, res) => {
     } catch (error) {
         console.error('绑定服务器失败:', error);
         res.status(500).json({ success: false, message: `注册失败: ${error.message}` });
+    }
+});
+
+// 进入服务器（可自动登录）
+app.post('/api/users/enter-server', async (req, res) => {
+    const { serverId } = req.body ?? {};
+    const handle = req.session.userHandle || req.session.pendingUserHandle;
+    if (!handle) {
+        return res.status(401).json({ success: false, message: '会话已过期，请重新登录' });
+    }
+
+    try {
+        const user = DataStore.getUserByHandle(handle);
+        if (!user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        const targetServerId = serverId ?? user.serverId;
+        if (!targetServerId) {
+            return res.status(400).json({ success: false, message: '请选择一个服务器' });
+        }
+
+        const normalizedTargetServerId = Number(targetServerId);
+        const userServerId = user.serverId != null ? Number(user.serverId) : null;
+
+        if (user.registrationStatus === 'active' && userServerId && userServerId !== normalizedTargetServerId) {
+            return res.status(400).json({ success: false, message: '该用户已绑定其它服务器，无法切换' });
+        }
+
+        const server = DataStore.getServerById(normalizedTargetServerId);
+        if (!server || !server.isActive) {
+            return res.status(404).json({ success: false, message: '服务器不存在或不可用' });
+        }
+
+        if (user.registrationStatus !== 'active') {
+            if (server.registrationPaused === true) {
+                return res.status(403).json({ success: false, message: '该服务器已暂停注册，无法绑定新用户' });
+            }
+
+            const client = new SillyTavernClient({
+                baseUrl: server.url,
+                adminHandle: server.admin_username,
+                adminPassword: server.admin_password
+            });
+
+            await client.registerUser({
+                handle: user.handle,
+                name: user.name,
+                password: user.password,
+                email: user.email,
+            });
+
+            DataStore.updateUser(handle, {
+                serverId: server.id,
+                registrationStatus: 'active',
+            });
+
+            delete req.session.pendingUserHandle;
+            delete req.session.pendingUserPassword;
+            req.session.userHandle = handle;
+        }
+
+        const serverBaseUrl = String(server.url || '').replace(/\/$/, '');
+        const loginPassword = req.session.userPassword ?? req.session.pendingUserPassword ?? user.password;
+
+        if (!loginPassword) {
+            return res.json({
+                success: true,
+                redirectUrl: `${serverBaseUrl}/login`,
+                requiresManualLogin: true,
+            });
+        }
+
+        let loginResult = null;
+        try {
+            const loginClient = new SillyTavernClient({ baseUrl: serverBaseUrl });
+            loginResult = await loginClient.loginUser({ handle: user.handle, password: loginPassword });
+        } catch (error) {
+            console.warn('自动登录失败，将跳转到手动登录:', error?.message || error);
+            return res.json({
+                success: true,
+                requiresManualLogin: true,
+                redirectUrl: `${serverBaseUrl}/login`,
+                message: '自动登录失败，请手动登录',
+            });
+        }
+
+        if (loginResult.cookies?.length) {
+            res.setHeader('Set-Cookie', loginResult.cookies);
+        }
+
+        delete req.session.userPassword;
+        delete req.session.pendingUserPassword;
+
+        return res.json({
+            success: true,
+            redirectUrl: `${serverBaseUrl}/`,
+        });
+    } catch (error) {
+        console.error('进入服务器失败:', error);
+        return res.status(500).json({ success: false, message: error.message || '进入服务器失败' });
     }
 });
 
@@ -593,7 +710,7 @@ app.get('/oauth/callback/:provider', async (req, res) => {
             delete req.session.oauthProvider;
             delete req.session.oauthBaseUrl;
 
-            return res.redirect('/select-server');
+            return res.redirect('/user-panel');
         }
         
         // IP 注册限制检查（新用户才检查）
@@ -660,9 +777,10 @@ app.get('/oauth/callback/:provider', async (req, res) => {
 
         // 设置 session 用于选服
         req.session.pendingUserHandle = newUser.handle;
+        req.session.pendingUserPassword = defaultPassword;
 
         // 跳转到选服页面
-        res.redirect('/select-server');
+        res.redirect('/user-panel');
 
     } catch (error) {
         console.error(`OAuth 回调处理失败 (${provider}):`, error);
@@ -776,7 +894,7 @@ app.post('/oauth/invite', async (req, res) => {
                 success: false,
                 isAlreadyRegistered: true,
                 handle: existingUser.handle,
-                loginUrl: '/select-server',
+                loginUrl: '/user-panel',
                 message: '该账号已完成注册，正在为您直接登录',
             });
         }
@@ -812,6 +930,7 @@ app.post('/oauth/invite', async (req, res) => {
         
         // 设置 session 用于选服
         req.session.pendingUserHandle = newUser.handle;
+        req.session.pendingUserPassword = defaultPassword;
         
         // 返回用户名和后续跳转地址，便于前端在成功弹窗中正确展示
         res.json({
@@ -819,8 +938,8 @@ app.post('/oauth/invite', async (req, res) => {
             handle: newUser.handle,
             // OAuth 流程下此时用户尚未绑定具体 SillyTavern 服务器，
             // 先跳转到本系统的选服页面，由用户选择服务器后再完成远程注册。
-            loginUrl: '/select-server',
-            redirectUrl: '/select-server',
+            loginUrl: '/user-panel',
+            redirectUrl: '/user-panel',
         });
         
     } catch (error) {
@@ -1447,7 +1566,7 @@ app.get('/api/admin/stats', requireAdminAuth(config), (_req, res) => {
 
 // 防止直接访问受保护的静态文件（必须通过路由访问）
 app.use((req, res, next) => {
-    const protectedFiles = ['/admin.html', '/admin-login.html', '/oauth-invite.html', '/select-server.html'];
+    const protectedFiles = ['/admin.html', '/admin-login.html', '/oauth-invite.html', '/user-panel.html', '/select-server.html'];
     if (protectedFiles.includes(req.path)) {
         return res.status(404).json({
             success: false,

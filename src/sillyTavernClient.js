@@ -2,9 +2,10 @@ import fetch from 'node-fetch';
 import kebabCase from 'lodash.kebabcase';
 
 class SessionContext {
-    constructor(cookie, csrfToken) {
+    constructor(cookie, csrfToken, setCookieHeaders = []) {
         this.cookie = cookie ?? null;
         this.csrfToken = csrfToken;
+        this.setCookieHeaders = Array.isArray(setCookieHeaders) ? setCookieHeaders : [];
     }
 }
 
@@ -137,6 +138,46 @@ export class SillyTavernClient {
             handle: data.handle,
             name: payload.name,
             email: payload.email,
+        };
+    }
+
+    async loginUser({ handle, password }) {
+        if (!handle) {
+            throw new Error('用户标识不能为空');
+        }
+
+        const normalizedHandle = this.normalizeHandle(handle);
+        if (!normalizedHandle) {
+            throw new Error('无法将该用户标识转换为有效格式');
+        }
+
+        const session = await this.#fetchCsrfToken();
+        const headers = {
+            'content-type': 'application/json',
+            'accept': 'application/json',
+            'x-csrf-token': session.csrfToken,
+        };
+
+        if (session.cookie) {
+            headers.cookie = session.cookie;
+        }
+
+        const response = await fetch(`${this.baseUrl}/api/users/login`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ handle: normalizedHandle, password: password ?? '' }),
+        });
+
+        if (!response.ok) {
+            const message = await this.#safeReadError(response);
+            throw new Error(`用户登录失败：${response.status} ${message}`);
+        }
+
+        const loginCookies = response.headers.raw()['set-cookie'] ?? [];
+        const combinedCookies = [...session.setCookieHeaders, ...loginCookies].filter(Boolean);
+        return {
+            handle: normalizedHandle,
+            cookies: combinedCookies,
         };
     }
 
@@ -319,14 +360,15 @@ export class SillyTavernClient {
         }
 
         const data = /** @type {Record<string, any>} */ (await response.json());
-        const sessionCookie = extractSessionCookies(response.headers.raw()['set-cookie']);
+        const setCookieHeaders = response.headers.raw()['set-cookie'] ?? [];
+        const sessionCookie = extractSessionCookies(setCookieHeaders);
         const effectiveCookie = sessionCookie ?? cookie ?? null;
 
         if (!effectiveCookie && data.token !== 'disabled') {
             throw new Error('未从 SillyTavern 收到会话 Cookie');
         }
 
-        return new SessionContext(effectiveCookie, data.token);
+        return new SessionContext(effectiveCookie, data.token, setCookieHeaders);
     }
 
     async #safeReadError(response) {

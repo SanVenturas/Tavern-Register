@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>用户面板 - TavernRegister</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .user-display {
+            margin-top: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 8px;
+            color: var(--accent);
+            display: inline-block;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        .server-list {
+            display: grid;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        .server-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+        .server-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+            border-color: var(--accent);
+        }
+        .server-card.selected {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: var(--accent);
+        }
+        .server-info {
+            flex: 1;
+            margin-right: 1rem;
+        }
+        .server-info h3 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1.1rem;
+        }
+        .server-info p {
+            margin: 0;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+        .server-meta {
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            opacity: 0.8;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem 1rem;
+        }
+        .server-meta span {
+            white-space: nowrap;
+        }
+        .server-announcement {
+            margin-top: 0.75rem;
+            font-size: 0.85rem;
+            opacity: 0.9;
+            line-height: 1.6;
+            word-wrap: break-word;
+        }
+        .server-announcement strong {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: rgba(240, 244, 255, 0.95);
+        }
+        .server-announcement-content {
+            display: block;
+            white-space: pre-line;
+            margin-top: 0.25rem;
+        }
+        .select-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .logout-btn {
+            background: rgba(255, 118, 117, 0.2);
+            border: 1px solid var(--error);
+            color: var(--error);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .logout-btn:hover {
+            background: rgba(255, 118, 117, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="card">
+            <div class="panel-header">
+                <div class="header" style="margin-bottom: 0;">
+                    <h1>用户面板</h1>
+                    <p>选择服务器后将直接进入 SillyTavern 主界面。</p>
+                    <p>如果使用第三方登录的用户密码默认为 123456，请登录后第一时间修改密码。</p>
+                </div>
+                <button class="logout-btn" id="logout-btn">退出登录</button>
+            </div>
+
+            <div id="user-display" class="user-display" style="display: none;"></div>
+
+            <div id="loading" style="text-align: center; padding: 2rem;">
+                正在加载可用服务器...
+            </div>
+
+            <div id="server-list" class="server-list" style="display: none;"></div>
+
+            <div id="status" role="status" aria-live="polite"></div>
+        </section>
+    </main>
+
+    <script>
+        let currentUser = null;
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function setStatus(message = '', isError = false) {
+            const statusElement = document.getElementById('status');
+            if (!statusElement) return;
+            statusElement.textContent = message;
+            statusElement.classList.toggle('status-error', Boolean(message) && isError);
+            statusElement.classList.toggle('status-success', Boolean(message) && !isError);
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const serverList = document.getElementById('server-list');
+            const loading = document.getElementById('loading');
+            const userDisplay = document.getElementById('user-display');
+            const logoutBtn = document.getElementById('logout-btn');
+
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', async () => {
+                    await logout();
+                });
+            }
+
+            try {
+                const userRes = await fetch('/api/user/status');
+                const userData = await userRes.json();
+                if (userData.success && userData.loggedIn) {
+                    currentUser = userData;
+                    if (userDisplay) {
+                        userDisplay.style.display = 'inline-block';
+                        userDisplay.textContent = `当前用户：${currentUser.handle}`;
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to check user status', e);
+            }
+
+            try {
+                const response = await fetch('/api/servers/available');
+                const data = await response.json();
+
+                loading.style.display = 'none';
+
+                if (!data.success || data.servers.length === 0) {
+                    serverList.style.display = 'block';
+                    serverList.innerHTML = '<div style="text-align: center; padding: 1rem;">暂无可用服务器，请联系管理员。</div>';
+                    return;
+                }
+
+                serverList.style.display = 'grid';
+                serverList.innerHTML = data.servers.map(server => {
+                    const isBound = currentUser && currentUser.serverId === server.id;
+                    const isPaused = server.registrationPaused === true;
+                    const activeClass = isBound ? 'selected' : '';
+                    const btnText = isBound ? '进入' : (isPaused ? '已暂停注册' : '选择并进入');
+                    const providerText = server.provider ? `提供方：${server.provider}` : '';
+                    const maintainerText = server.maintainer ? `维护者：${server.maintainer}` : '';
+                    const contactText = server.contact ? `联系方式：${server.contact}` : '';
+                    const registeredText = typeof server.registeredUserCount === 'number'
+                        ? `已注册：${server.registeredUserCount} 人`
+                        : '';
+                    const canSelect = isBound || !isPaused;
+                    return `
+                    <div class="server-card ${activeClass} ${!canSelect ? 'disabled' : ''}" ${canSelect ? `onclick="handleServerClick(${server.id}, '${server.name}', ${isPaused})"` : ''} style="${!canSelect ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
+                        <div class="server-info">
+                            <h3>${server.name} ${isBound ? '<span style="font-size:0.8em;color:#10b981">(已绑定)</span>' : ''} ${isPaused && !isBound ? '<span style="font-size:0.8em;color:#ffc107">(暂停注册)</span>' : ''}</h3>
+                            <p>${server.description || '暂无描述'}</p>
+                            <div class="server-meta">
+                                ${providerText ? `<span>${providerText}</span>` : ''}
+                                ${maintainerText ? `<span>${maintainerText}</span>` : ''}
+                                ${contactText ? `<span>${contactText}</span>` : ''}
+                                ${registeredText ? `<span>${registeredText}</span>` : ''}
+                            </div>
+                            ${server.announcement ? `
+                            <div class="server-announcement">
+                                <strong>公告：</strong>
+                                <span class="server-announcement-content">${escapeHtml(server.announcement)}</span>
+                            </div>` : ''}
+                            ${isPaused && !isBound ? `
+                            <div class="server-announcement" style="color: #ffc107; margin-top: 0.5rem;">
+                                <strong>提示：</strong><span>该服务器已暂停注册，无法绑定新用户</span>
+                            </div>` : ''}
+                        </div>
+                        <button class="select-btn" ${!canSelect ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>${btnText}</button>
+                    </div>
+                `}).join('');
+
+            } catch (error) {
+                loading.style.display = 'none';
+                setStatus('加载服务器列表失败', true);
+            }
+        });
+
+        async function handleServerClick(serverId, serverName, isPaused) {
+            if (currentUser && currentUser.serverId && currentUser.serverId !== serverId) {
+                alert(`您已绑定到服务器 "${currentUser.serverName}"，无法切换到 "${serverName}"。`);
+                return;
+            }
+
+            if (!currentUser && isPaused) {
+                alert(`服务器 "${serverName}" 已暂停注册，无法绑定新用户。`);
+                return;
+            }
+
+            await enterServer(serverId);
+        }
+
+        async function enterServer(serverId) {
+            setStatus('正在进入服务器...', false);
+            try {
+                const response = await fetch('/api/users/enter-server', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ serverId })
+                });
+                const data = await response.json();
+
+                if (data.success && data.redirectUrl) {
+                    setStatus('即将进入 SillyTavern...', false);
+                    window.location.href = data.redirectUrl;
+                    return;
+                }
+
+                setStatus(data.message || '进入失败', true);
+            } catch (error) {
+                setStatus('发生错误，请重试', true);
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/user/logout', { method: 'POST' });
+            } catch (error) {
+                console.error('Logout failed:', error);
+            }
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html>

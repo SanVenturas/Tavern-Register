@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             setStatus('登录成功，正在跳转...', false);
             setTimeout(() => {
-                window.location.href = data.redirectUrl || '/select-server';
+                window.location.href = data.redirectUrl || '/user-panel';
             }, 1000);
 
         } catch (error) {
