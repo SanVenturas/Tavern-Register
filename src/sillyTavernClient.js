@@ -280,6 +280,44 @@ export class SillyTavernClient {
         }
     }
 
+    async downloadBackup({ handle }) {
+        if (!handle) {
+            throw new Error('用户标识不能为空');
+        }
+
+        const normalizedHandle = this.normalizeHandle(handle);
+        if (!normalizedHandle) {
+            throw new Error('无法将该用户标识转换为有效格式');
+        }
+
+        const session = await this.#loginAsAdmin();
+        const backupContext = await this.#fetchCsrfToken(session.cookie);
+        const authCookie = backupContext.cookie ?? session.cookie;
+
+        const headers = {
+            'content-type': 'application/json',
+            'accept': 'application/json',
+            'x-csrf-token': backupContext.csrfToken,
+        };
+
+        if (authCookie) {
+            headers.cookie = authCookie;
+        }
+
+        const response = await fetch(`${this.baseUrl}/api/users/backup`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ handle: normalizedHandle }),
+        });
+
+        if (!response.ok) {
+            const message = await this.#safeReadError(response);
+            throw new Error(`下载备份失败：${response.status} ${message}`);
+        }
+
+        return response;
+    }
+
     async #loginAsAdmin() {
         const session = await this.#fetchCsrfToken();
 

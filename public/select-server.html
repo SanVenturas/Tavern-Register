@@ -93,6 +93,25 @@
             cursor: pointer;
             font-weight: 600;
         }
+        .server-actions {
+            margin-top: 0.75rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .action-btn {
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(240, 244, 255, 0.9);
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .action-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
     </style>
 </head>
 <body>
@@ -174,6 +193,13 @@
                         : '';
                     const hasMeta = providerText || maintainerText || contactText || registeredText;
                     const canSelect = isBound || !isPaused;  // 已绑定或未暂停注册的可以操作
+                    const backupActions = isBound ? `
+                            <div class="server-actions">
+                                <button class="action-btn" onclick="event.stopPropagation(); downloadBackup(${server.id})">下载备份</button>
+                                <button class="action-btn" onclick="event.stopPropagation(); triggerBackupUpload(${server.id})">应用备份</button>
+                                <input type="file" id="backup-input-${server.id}" accept=".zip" style="display:none" onchange="applyBackup(${server.id}, this.files[0])">
+                            </div>
+                        ` : '';
                     return `
                     <div class="server-card ${activeClass} ${!canSelect ? 'disabled' : ''}" ${canSelect ? `onclick="handleServerClick(${server.id}, '${server.name}', ${isPaused})"` : ''} style="${!canSelect ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
                         <div class="server-info">
@@ -194,6 +220,7 @@
                             <div class="server-announcement" style="color: #ffc107; margin-top: 0.5rem;">
                                 <strong>提示：</strong><span>该服务器已暂停注册，无法绑定新用户</span>
                             </div>` : ''}
+                            ${backupActions}
                         </div>
                         <button class="select-btn" ${!canSelect ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>${btnText}</button>
                     </div>
@@ -205,6 +232,105 @@
                 status.className = 'status-error';
             }
         });
+
+        function triggerBackupUpload(serverId) {
+            const input = document.getElementById(`backup-input-${serverId}`);
+            if (input) {
+                input.click();
+            }
+        }
+
+        async function downloadBackup(serverId) {
+            const status = document.getElementById('status');
+            if (!currentUser || currentUser.serverId !== serverId) {
+                alert('请先绑定服务器后再下载备份。');
+                return;
+            }
+
+            status.textContent = '正在生成备份...';
+            status.className = '';
+
+            try {
+                const response = await fetch('/api/users/backup-download', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ serverId }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    status.textContent = errorData.message || '下载备份失败';
+                    status.className = 'status-error';
+                    return;
+                }
+
+                const blob = await response.blob();
+                const disposition = response.headers.get('content-disposition') || '';
+                let filename = `${currentUser.handle}-backup.zip`;
+                const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+                if (match) {
+                    filename = decodeURIComponent(match[1] || match[2]);
+                }
+
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                status.textContent = '备份下载完成';
+                status.className = 'status-success';
+            } catch (error) {
+                status.textContent = '下载备份失败';
+                status.className = 'status-error';
+            }
+        }
+
+        async function applyBackup(serverId, file) {
+            const status = document.getElementById('status');
+            if (!file) {
+                return;
+            }
+
+            if (!currentUser || currentUser.serverId !== serverId) {
+                alert('请先绑定服务器后再应用备份。');
+                return;
+            }
+
+            if (!confirm('确定要应用该备份吗？该操作会覆盖现有数据。')) {
+                return;
+            }
+
+            status.textContent = '正在应用备份...';
+            status.className = '';
+
+            try {
+                const formData = new FormData();
+                formData.append('backup', file);
+                formData.append('serverId', serverId);
+
+                const response = await fetch('/api/users/backup-apply', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    status.textContent = result.message || '应用备份失败';
+                    status.className = 'status-error';
+                    return;
+                }
+
+                status.textContent = result.message || '备份已应用';
+                status.className = 'status-success';
+            } catch (error) {
+                status.textContent = '应用备份失败';
+                status.className = 'status-error';
+            }
+        }
 
         async function handleServerClick(serverId, serverName, isPaused) {
             const status = document.getElementById('status');

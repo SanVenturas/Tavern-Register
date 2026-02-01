@@ -1,7 +1,10 @@
 import express from 'express';
 import helmet from 'helmet';
 import session from 'express-session';
+import multer from 'multer';
+import AdmZip from 'adm-zip';
 import path from 'node:path';
+import os from 'node:os';
 import { promises as fsPromises } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -195,6 +198,10 @@ const indexHtmlPath = path.join(publicDir, 'index.html');
 const registerHtmlPath = path.join(publicDir, 'register.html');
 const selectServerHtmlPath = path.join(publicDir, 'select-server.html');
 const loginHtmlPath = path.join(publicDir, 'login.html');
+const upload = multer({
+    dest: path.join(os.tmpdir(), 'tavern-register-uploads'),
+    limits: { fileSize: 1024 * 1024 * 1024 },
+});
 
 app.get('/health', (_req, res) => {
     res.json({
@@ -603,6 +610,130 @@ app.post('/api/users/bind-server', async (req, res) => {
     } catch (error) {
         console.error('绑定服务器失败:', error);
         res.status(500).json({ success: false, message: `注册失败: ${error.message}` });
+    }
+});
+
+// 下载用户备份（通过 SillyTavern API）
+app.post('/api/users/backup-download', async (req, res) => {
+    try {
+        const handle = req.session.userHandle || req.session.pendingUserHandle;
+        if (!handle) {
+            return res.status(401).json({ success: false, message: '会话已过期，请重新登录' });
+        }
+
+        const user = DataStore.getUserByHandle(handle);
+        if (!user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        const serverId = req.body?.serverId ?? user.serverId;
+        if (!serverId || Number(serverId) !== Number(user.serverId)) {
+            return res.status(403).json({ success: false, message: '无权访问该服务器的备份' });
+        }
+
+        const server = DataStore.getServerById(serverId);
+        if (!server) {
+            return res.status(404).json({ success: false, message: '服务器不存在' });
+        }
+
+        const client = new SillyTavernClient({
+            baseUrl: server.url,
+            adminHandle: server.admin_username,
+            adminPassword: server.admin_password,
+        });
+
+        const upstream = await client.downloadBackup({ handle: user.handle });
+        const contentType = upstream.headers.get('content-type') || 'application/zip';
+        const disposition = upstream.headers.get('content-disposition');
+
+        res.status(200);
+        res.setHeader('content-type', contentType);
+        if (disposition) {
+            res.setHeader('content-disposition', disposition);
+        } else {
+            res.attachment(`${user.handle}-backup.zip`);
+        }
+
+        upstream.body.pipe(res);
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message || '下载备份失败' });
+    }
+});
+
+// 应用用户备份（同机模式）
+app.post('/api/users/backup-apply', upload.single('backup'), async (req, res) => {
+    try {
+        const handle = req.session.userHandle || req.session.pendingUserHandle;
+        if (!handle) {
+            return res.status(401).json({ success: false, message: '会话已过期，请重新登录' });
+        }
+
+        const user = DataStore.getUserByHandle(handle);
+        if (!user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        const serverId = req.body?.serverId ?? user.serverId;
+        if (!serverId || Number(serverId) !== Number(user.serverId)) {
+            return res.status(403).json({ success: false, message: '无权操作该服务器的备份' });
+        }
+
+        const server = DataStore.getServerById(serverId);
+        if (!server) {
+            return res.status(404).json({ success: false, message: '服务器不存在' });
+        }
+
+        if (!server.localDataRoot) {
+            return res.status(400).json({ success: false, message: '仅同机部署可应用备份，请先在服务器管理中配置本体数据目录' });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: '未检测到备份文件' });
+        }
+
+        const client = new SillyTavernClient({
+            baseUrl: server.url,
+            adminHandle: server.admin_username,
+            adminPassword: server.admin_password,
+        });
+        const normalizedHandle = client.normalizeHandle(user.handle);
+        if (!normalizedHandle) {
+            return res.status(400).json({ success: false, message: '用户标识无效' });
+        }
+
+        const userRoot = path.join(server.localDataRoot, normalizedHandle);
+        const resolvedUserRoot = path.resolve(userRoot);
+        const zipPath = req.file.path;
+
+        try {
+            await fsPromises.rm(userRoot, { recursive: true, force: true });
+            await fsPromises.mkdir(userRoot, { recursive: true });
+
+            const zip = new AdmZip(zipPath);
+            const entries = zip.getEntries();
+
+            for (const entry of entries) {
+                const entryName = entry.entryName.replace(/\\/g, '/');
+                const targetPath = path.resolve(userRoot, entryName);
+                if (!targetPath.startsWith(resolvedUserRoot)) {
+                    continue;
+                }
+
+                if (entry.isDirectory) {
+                    await fsPromises.mkdir(targetPath, { recursive: true });
+                    continue;
+                }
+
+                await fsPromises.mkdir(path.dirname(targetPath), { recursive: true });
+                await fsPromises.writeFile(targetPath, entry.getData());
+            }
+        } finally {
+            await fsPromises.rm(zipPath, { force: true });
+        }
+
+        res.json({ success: true, message: '备份已应用，重新登录后生效' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message || '应用备份失败' });
     }
 });
 
