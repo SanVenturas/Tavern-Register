@@ -201,7 +201,7 @@
                             </div>
                         ` : '';
                     return `
-                    <div class="server-card ${activeClass} ${!canSelect ? 'disabled' : ''}" ${canSelect ? `onclick="handleServerClick(${server.id}, '${server.name}', ${isPaused})"` : ''} style="${!canSelect ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
+                    <div class="server-card ${activeClass} ${!canSelect ? 'disabled' : ''}" ${canSelect && !isBound ? `onclick="handleServerClick(${server.id}, '${server.name}', ${isPaused})"` : ''} style="${!canSelect ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
                         <div class="server-info">
                             <h3>${server.name} ${isBound ? '<span style="font-size:0.8em;color:#10b981">(已绑定)</span>' : ''} ${isPaused && !isBound ? '<span style="font-size:0.8em;color:#ffc107">(暂停注册)</span>' : ''}</h3>
                             <p>${server.description || '暂无描述'}</p>
@@ -222,7 +222,7 @@
                             </div>` : ''}
                             ${backupActions}
                         </div>
-                        <button class="select-btn" ${!canSelect ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>${btnText}</button>
+                        <button class="select-btn" ${!canSelect ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : `onclick="handleServerClick(${server.id}, '${server.name}', ${isPaused})"`}>${btnText}</button>
                     </div>
                 `}).join('');
 
