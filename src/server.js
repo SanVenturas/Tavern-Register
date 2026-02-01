@@ -202,6 +202,14 @@ const upload = multer({
     dest: path.join(os.tmpdir(), 'tavern-register-uploads'),
     limits: { fileSize: 1024 * 1024 * 1024 },
 });
+function appendLog(message) {
+    console.log(message.trim());
+}
+
+function formatLogLine(level, context) {
+    const timestamp = new Date().toISOString();
+    return `[${timestamp}] [${level}] ${JSON.stringify(context)}\n`;
+}
 
 app.get('/health', (_req, res) => {
     res.json({
@@ -665,29 +673,35 @@ app.post('/api/users/backup-apply', upload.single('backup'), async (req, res) =>
     try {
         const handle = req.session.userHandle || req.session.pendingUserHandle;
         if (!handle) {
+            await appendLog(formatLogLine('WARN', { action: 'backup-apply', reason: 'no-session', ip: req.ip }));
             return res.status(401).json({ success: false, message: '会话已过期，请重新登录' });
         }
 
         const user = DataStore.getUserByHandle(handle);
         if (!user) {
+            await appendLog(formatLogLine('WARN', { action: 'backup-apply', reason: 'user-not-found', handle, ip: req.ip }));
             return res.status(404).json({ success: false, message: '用户不存在' });
         }
 
         const serverId = req.body?.serverId ?? user.serverId;
         if (!serverId || Number(serverId) !== Number(user.serverId)) {
+            await appendLog(formatLogLine('WARN', { action: 'backup-apply', reason: 'server-mismatch', handle, serverId, userServerId: user.serverId, ip: req.ip }));
             return res.status(403).json({ success: false, message: '无权操作该服务器的备份' });
         }
 
         const server = DataStore.getServerById(serverId);
         if (!server) {
+            await appendLog(formatLogLine('WARN', { action: 'backup-apply', reason: 'server-not-found', handle, serverId, ip: req.ip }));
             return res.status(404).json({ success: false, message: '服务器不存在' });
         }
 
         if (!server.localDataRoot) {
+            await appendLog(formatLogLine('WARN', { action: 'backup-apply', reason: 'missing-local-data-root', handle, serverId, ip: req.ip }));
             return res.status(400).json({ success: false, message: '仅同机部署可应用备份，请先在服务器管理中配置本体数据目录' });
         }
 
         if (!req.file) {
+            await appendLog(formatLogLine('WARN', { action: 'backup-apply', reason: 'missing-file', handle, serverId, ip: req.ip }));
             return res.status(400).json({ success: false, message: '未检测到备份文件' });
         }
 
@@ -705,6 +719,16 @@ app.post('/api/users/backup-apply', upload.single('backup'), async (req, res) =>
         const resolvedUserRoot = path.resolve(userRoot);
         const zipPath = req.file.path;
 
+        await appendLog(formatLogLine('INFO', {
+            action: 'backup-apply',
+            stage: 'start',
+            handle: normalizedHandle,
+            serverId,
+            zipPath,
+            userRoot,
+            ip: req.ip,
+        }));
+
         try {
             await fsPromises.rm(userRoot, { recursive: true, force: true });
             await fsPromises.mkdir(userRoot, { recursive: true });
@@ -712,10 +736,23 @@ app.post('/api/users/backup-apply', upload.single('backup'), async (req, res) =>
             const zip = new AdmZip(zipPath);
             const entries = zip.getEntries();
 
+            await appendLog(formatLogLine('INFO', {
+                action: 'backup-apply',
+                stage: 'entries',
+                handle: normalizedHandle,
+                count: entries.length,
+            }));
+
             for (const entry of entries) {
                 const entryName = entry.entryName.replace(/\\/g, '/');
                 const targetPath = path.resolve(userRoot, entryName);
                 if (!targetPath.startsWith(resolvedUserRoot)) {
+                    await appendLog(formatLogLine('WARN', {
+                        action: 'backup-apply',
+                        stage: 'skip-entry',
+                        handle: normalizedHandle,
+                        entry: entryName,
+                    }));
                     continue;
                 }
 
@@ -727,12 +764,22 @@ app.post('/api/users/backup-apply', upload.single('backup'), async (req, res) =>
                 await fsPromises.mkdir(path.dirname(targetPath), { recursive: true });
                 await fsPromises.writeFile(targetPath, entry.getData());
             }
+            await appendLog(formatLogLine('INFO', {
+                action: 'backup-apply',
+                stage: 'completed',
+                handle: normalizedHandle,
+            }));
         } finally {
             await fsPromises.rm(zipPath, { force: true });
         }
 
         res.json({ success: true, message: '备份已应用，重新登录后生效' });
     } catch (error) {
+        await appendLog(formatLogLine('ERROR', {
+            action: 'backup-apply',
+            stage: 'failed',
+            message: error?.message || error,
+        }));
         res.status(500).json({ success: false, message: error.message || '应用备份失败' });
     }
 });
