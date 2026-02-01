@@ -1576,7 +1576,34 @@ app.put('/api/admin/servers/:id', requireAdminAuth(config), async (req, res) => 
         }
 
         const updatedServer = DataStore.updateServer(id, updates);
-        res.json({ success: true, server: updatedServer });
+        if (!updatedServer) {
+            return res.status(500).json({ success: false, message: '服务器更新失败' });
+        }
+
+        const reloaded = DataStore.getServerById(id);
+        if (!reloaded) {
+            return res.status(500).json({ success: false, message: '服务器更新后读取失败' });
+        }
+
+        const mismatch = [];
+        if (updates.localDataRoot !== undefined && (reloaded.localDataRoot || '') !== (updates.localDataRoot || '')) {
+            mismatch.push('localDataRoot');
+        }
+        if (updates.storageLimitValue !== undefined && (reloaded.storageLimitValue ?? null) !== (updates.storageLimitValue ?? null)) {
+            mismatch.push('storageLimitValue');
+        }
+        if (updates.storageCheckIntervalMinutes !== undefined && (reloaded.storageCheckIntervalMinutes ?? null) !== (updates.storageCheckIntervalMinutes ?? null)) {
+            mismatch.push('storageCheckIntervalMinutes');
+        }
+
+        if (mismatch.length > 0) {
+            return res.status(500).json({
+                success: false,
+                message: `服务器更新未持久化: ${mismatch.join(', ')}`,
+            });
+        }
+
+        res.json({ success: true, server: reloaded });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
