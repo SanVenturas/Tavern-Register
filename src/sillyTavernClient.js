@@ -280,6 +280,42 @@ export class SillyTavernClient {
         }
     }
 
+    async enableUser({ handle }) {
+        if (!handle) {
+            throw new Error('用户标识不能为空');
+        }
+
+        const normalizedHandle = this.normalizeHandle(handle);
+        if (!normalizedHandle) {
+            throw new Error('无法将该用户标识转换为有效格式');
+        }
+
+        const session = await this.#loginAsAdmin();
+        const updateContext = await this.#fetchCsrfToken(session.cookie);
+        const authCookie = updateContext.cookie ?? session.cookie;
+
+        const headers = {
+            'content-type': 'application/json',
+            'accept': 'application/json',
+            'x-csrf-token': updateContext.csrfToken,
+        };
+
+        if (authCookie) {
+            headers.cookie = authCookie;
+        }
+
+        const response = await fetch(`${this.baseUrl}/api/users/enable`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ handle: normalizedHandle }),
+        });
+
+        if (!response.ok) {
+            const message = await this.#safeReadError(response);
+            throw new Error(`启用用户失败：${response.status} ${message}`);
+        }
+    }
+
     async downloadBackup({ handle }) {
         if (!handle) {
             throw new Error('用户标识不能为空');

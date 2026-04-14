@@ -130,13 +130,28 @@ async function enforceStorageLimits() {
                 });
 
                 if (usageBytes >= server.storageLimitBytes) {
-                    try {
-                        await client.disableUser({ handle: normalizedHandle });
-                        DataStore.updateUser(normalizedHandle, {
-                            quotaDisabledAt: new Date().toISOString(),
-                        });
-                    } catch (error) {
-                        console.error('禁用超限用户失败:', normalizedHandle, error?.message || error);
+                    if (!user.quotaDisabledAt) {
+                        try {
+                            await client.disableUser({ handle: normalizedHandle });
+                            DataStore.updateUser(normalizedHandle, {
+                                quotaDisabledAt: new Date().toISOString(),
+                            });
+                            console.log(`[存储限额] 用户 ${normalizedHandle} 空间超限 (${usageBytes} >= ${server.storageLimitBytes})，已自动禁用账号。`);
+                        } catch (error) {
+                            console.error('禁用超限用户失败:', normalizedHandle, error?.message || error);
+                        }
+                    }
+                } else {
+                    if (user.quotaDisabledAt) {
+                        try {
+                            await client.enableUser({ handle: normalizedHandle });
+                            DataStore.updateUser(normalizedHandle, {
+                                quotaDisabledAt: null,
+                            });
+                            console.log(`[存储限额] 用户 ${normalizedHandle} 空间已恢复至安全范围，已自动解封账号。`);
+                        } catch (error) {
+                            console.error('自动解封用户失败:', normalizedHandle, error?.message || error);
+                        }
                     }
                 }
             }
