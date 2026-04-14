@@ -68,7 +68,7 @@ export function loadConfig() {
         let parsedBaseUrl;
         try {
             parsedBaseUrl = new URL(rawBaseUrl);
-        } catch (error) {
+        } catch {
             throw new Error('SILLYTAVERN_BASE_URL 必须是包含协议的完整网址，例如 https://example.com:8000');
         }
         baseUrl = parsedBaseUrl.toString().replace(/\/$/, '');

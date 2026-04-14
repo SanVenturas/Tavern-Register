@@ -112,8 +112,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const formData = new FormData(createInviteForm);
             const data = {
-                count: parseInt(formData.get('count')),
-                maxUses: parseInt(formData.get('maxUses')),
+                count: parseInt(formData.get('count'), 10),
+                maxUses: parseInt(formData.get('maxUses'), 10),
                 expiresAt: formData.get('expiresAt') || null,
             };
 

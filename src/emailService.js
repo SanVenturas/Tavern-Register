@@ -134,36 +134,41 @@ export class EmailService {
      * 验证验证码
      */
     verifyCode(email, code) {
-        const normalizedEmail = email.toLowerCase().trim();
-        const stored = verificationCodes.get(normalizedEmail);
-        
-        if (!stored) {
-            return { valid: false, message: '请先获取验证码' };
-        }
-        
-        const now = Date.now();
-        
-        // 检查是否过期
-        if (now > stored.expiresAt) {
+        try {
+            const normalizedEmail = email.toLowerCase().trim();
+            const stored = verificationCodes.get(normalizedEmail);
+            
+            if (!stored) {
+                return { valid: false, message: '请先获取验证码' };
+            }
+            
+            const now = Date.now();
+            
+            // 检查是否过期
+            if (now > stored.expiresAt) {
+                verificationCodes.delete(normalizedEmail);
+                return { valid: false, message: '验证码已过期，请重新获取' };
+            }
+            
+            // 检查尝试次数（防止暴力破解）
+            if (stored.attempts >= 5) {
+                verificationCodes.delete(normalizedEmail);
+                return { valid: false, message: '验证码尝试次数过多，请重新获取' };
+            }
+            
+            // 验证码比对
+            if (stored.code !== code.trim()) {
+                stored.attempts += 1;
+                return { valid: false, message: `验证码错误，剩余尝试次数：${5 - stored.attempts}` };
+            }
+            
+            // 验证成功，删除验证码
             verificationCodes.delete(normalizedEmail);
-            return { valid: false, message: '验证码已过期，请重新获取' };
+            return { valid: true };
+        } catch (error) {
+            console.error('Verify code error:', error);
+            return { valid: false, message: '验证失败' };
         }
-        
-        // 检查尝试次数（防止暴力破解）
-        if (stored.attempts >= 5) {
-            verificationCodes.delete(normalizedEmail);
-            return { valid: false, message: '验证码尝试次数过多，请重新获取' };
-        }
-        
-        // 验证码比对
-        if (stored.code !== code.trim()) {
-            stored.attempts += 1;
-            return { valid: false, message: `验证码错误，剩余尝试次数：${5 - stored.attempts}` };
-        }
-        
-        // 验证成功，删除验证码
-        verificationCodes.delete(normalizedEmail);
-        return { valid: true };
     }
     
     /**

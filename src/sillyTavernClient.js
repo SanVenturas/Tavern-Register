@@ -1,5 +1,4 @@
 import fetch from 'node-fetch';
-import kebabCase from 'lodash.kebabcase';
 
 class SessionContext {
     constructor(cookie, csrfToken) {
@@ -68,7 +67,7 @@ export class SillyTavernClient {
      */
     async testConnection() {
         try {
-            const session = await this.#loginAsAdmin();
+            await this.#loginAsAdmin();
             return { success: true };
         } catch (error) {
             return { success: false, message: error.message };

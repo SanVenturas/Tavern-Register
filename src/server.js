@@ -209,7 +209,6 @@ app.use(session({
     },
 }));
 const publicDir = path.join(__dirname, '../public');
-const indexHtmlPath = path.join(publicDir, 'index.html');
 const registerHtmlPath = path.join(publicDir, 'register.html');
 const selectServerHtmlPath = path.join(publicDir, 'select-server.html');
 const loginHtmlPath = path.join(publicDir, 'login.html');
@@ -494,7 +493,6 @@ app.get('/api/servers/available', (req, res) => {
     try {
         const handle = req.session.userHandle || req.session.pendingUserHandle;
         const user = handle ? DataStore.getUserByHandle(handle) : null;
-        const userServerId = user && user.serverId ? Number(user.serverId) : null;
         const isRegistered = user && user.registrationStatus === 'active';
         
         const allUsers = DataStore.getUsers();
@@ -549,7 +547,8 @@ app.get('/api/user/status', (req, res) => {
     const server = normalizedServerId != null ? DataStore.getServerById(normalizedServerId) : null;
     
     // 排除敏感信息：密码
-    const { password, ...safeUser } = user;
+    const safeUser = { ...user };
+    delete safeUser.password;
     
     res.json({
         success: true,
@@ -618,11 +617,6 @@ app.post('/api/users/bind-server', async (req, res) => {
         // 清除 pending 状态，确保登录状态
         delete req.session.pendingUserHandle;
         req.session.userHandle = handle;
-
-        const defaultPassword = oauthService.getDefaultPassword();
-        const isDefaultPassword = user.password === defaultPassword; // 注意：这里 user.password 已经是 null 了，逻辑有点问题。应该在 update 之前判断。
-        // 修正：
-        // const isDefaultPassword = user.password === oauthService.getDefaultPassword();
 
         res.json({
             success: true,
@@ -984,7 +978,13 @@ app.get('/oauth/callback/:provider', async (req, res) => {
         delete req.session.oauthBaseUrl;
 
         const errorMessage = error.message || '注册失败，请稍后再试';
-        res.status(500).send(`注册失败: ${errorMessage}`);
+        const safeErrorMessage = String(errorMessage)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        res.status(500).send(`注册失败: ${safeErrorMessage}`);
     }
 });
 
@@ -1264,7 +1264,8 @@ app.get('/api/admin/users', requireAdminAuth(config), (req, res) => {
         const users = allUsers.slice(startIndex, endIndex).map(u => {
             const server = servers.find(s => s.id === u.serverId);
             // 排除敏感信息：密码
-            const { password, ...safeUser } = u;
+            const safeUser = { ...u };
+            delete safeUser.password;
             return {
                 ...safeUser,
                 serverName: server ? server.name : (u.serverId ? '未知服务器' : '未选择')
@@ -1431,7 +1432,9 @@ app.get('/api/admin/servers', requireAdminAuth(config), (req, res) => {
                 return Number(u.serverId) === serverNumericId;
             }).length;
             // 排除敏感信息：管理员用户名和密码
-            const { admin_username, admin_password, ...safeServer } = s;
+            const safeServer = { ...s };
+            delete safeServer.admin_username;
+            delete safeServer.admin_password;
             return {
                 ...safeServer,
                 id: serverNumericId,
@@ -1720,8 +1723,8 @@ app.post('/api/admin/invite-codes', requireAdminAuth(config), (req, res) => {
         }
         
         const codes = InviteCodeService.createInviteCodes({
-            count: parseInt(count),
-            maxUses: parseInt(maxUses),
+            count: parseInt(count, 10),
+            maxUses: parseInt(maxUses, 10),
             expiresAt: expiresAt ? new Date(expiresAt) : null,
             createdBy: 'admin',
         });
@@ -1797,7 +1800,8 @@ app.get('/api/admin/stats', requireAdminAuth(config), (_req, res) => {
         
         // 排除敏感信息：用户密码
         const safeRecentUsers = users.slice(-10).reverse().map(u => {
-            const { password, ...safeUser } = u;
+            const safeUser = { ...u };
+            delete safeUser.password;
             return safeUser;
         });
         

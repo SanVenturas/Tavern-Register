@@ -56,7 +56,6 @@ export class OAuthService {
         }
 
         const clientId = this.config[`${provider.toUpperCase()}_CLIENT_ID`];
-        const clientSecret = this.config[`${provider.toUpperCase()}_CLIENT_SECRET`];
 
         if (!clientId) {
             throw new Error(`${provider} OAuth 未配置客户端 ID`);
