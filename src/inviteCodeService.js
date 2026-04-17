@@ -50,19 +50,21 @@ export class InviteCodeService {
     }
 
     /**
-     * 验证邀请码
-     * @param {string} code
-     * @returns {{valid: boolean, message?: string}}
+     * 验证邀请码（仅查询）
      */
     static validate(code) {
         return DataStore.validateInviteCode(code);
     }
 
     /**
-     * 使用邀请码
-     * @param {string} code
-     * @param {string} usedBy
-     * @returns {boolean}
+     * 原子地验证并消耗邀请码
+     */
+    static validateAndUse(code, usedBy) {
+        return DataStore.validateAndUseInviteCode(code, usedBy);
+    }
+
+    /**
+     * 使用邀请码（保留向后兼容）
      */
     static use(code, usedBy) {
         return DataStore.useInviteCode(code, usedBy);

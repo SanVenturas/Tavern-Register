@@ -428,7 +428,7 @@ app.post('/register', async (req, res) => {
             verifiedEmail = email.trim().toLowerCase();
         }
         
-        // 如果启用了邀请码，验证邀请码
+        // 如果启用了邀请码，预检邀请码格式
         if (config.requireInviteCode) {
             if (!inviteCode || typeof inviteCode !== 'string' || !inviteCode.trim()) {
                 return res.status(400).json({
@@ -436,19 +436,22 @@ app.post('/register', async (req, res) => {
                     message: '邀请码不能为空',
                 });
             }
-            
-            const validation = InviteCodeService.validate(inviteCode.trim().toUpperCase());
-            if (!validation.valid) {
-                return res.status(400).json({
-                    success: false,
-                    message: validation.message || '邀请码无效',
-                });
-            }
         }
         
         // 如果没有提供密码，使用默认密码
         const finalPassword = password || oauthService.getDefaultPassword();
         
+        // 如果启用了邀请码，原子地验证并消耗邀请码（防止并发重复使用）
+        if (config.requireInviteCode && inviteCode) {
+            const inviteResult = InviteCodeService.validateAndUse(inviteCode.trim().toUpperCase(), normalizedHandle);
+            if (!inviteResult.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: inviteResult.message || '邀请码无效',
+                });
+            }
+        }
+
         // 仅在本地创建用户记录，标记为 pending_selection
         const newUser = DataStore.recordUser({
             handle: normalizedHandle,
@@ -460,11 +463,6 @@ app.post('/register', async (req, res) => {
             registrationMethod: 'manual',
             registrationStatus: 'pending_selection'
         });
-
-        // 如果使用了邀请码，标记为已使用
-        if (config.requireInviteCode && inviteCode) {
-            InviteCodeService.use(inviteCode.trim().toUpperCase(), newUser.handle);
-        }
 
         const timestamp = new Date().toISOString();
         console.info(`[注册审计] 时间 ${timestamp}，IP ${clientIp}，用户名 ${newUser.handle}，邮箱 ${verifiedEmail || '无'}，本地创建成功，等待选服`);
@@ -739,6 +737,15 @@ app.post('/api/users/backup-apply', upload.single('backup'), async (req, res) =>
         }));
 
         try {
+            // 校验用户数据路径在预期的 localDataRoot 范围内，防止误删
+            const resolvedDataRoot = path.resolve(server.localDataRoot);
+            if (!resolvedUserRoot.startsWith(resolvedDataRoot + path.sep) && resolvedUserRoot !== resolvedDataRoot) {
+                return res.status(400).json({
+                    success: false,
+                    message: '用户数据路径异常，操作已拒绝',
+                });
+            }
+
             await fsPromises.rm(userRoot, { recursive: true, force: true });
             await fsPromises.mkdir(userRoot, { recursive: true });
 
@@ -1053,21 +1060,12 @@ app.post('/oauth/invite', async (req, res) => {
         verifiedEmail = email.trim().toLowerCase();
     }
     
-    // 邀请码验证
+    // 邀请码预检格式
     if (config.requireInviteCode) {
         if (!inviteCode || typeof inviteCode !== 'string' || !inviteCode.trim()) {
             return res.status(400).json({
                 success: false,
                 message: '邀请码不能为空',
-            });
-        }
-        
-        // 验证邀请码
-        const validation = InviteCodeService.validate(inviteCode.trim().toUpperCase());
-        if (!validation.valid) {
-            return res.status(400).json({
-                success: false,
-                message: validation.message || '邀请码无效',
             });
         }
     }
@@ -1078,8 +1076,6 @@ app.post('/oauth/invite', async (req, res) => {
         // 检查是否已注册
         const existingUser = DataStore.getUserByHandle(handle);
         if (existingUser) {
-            // 如果用户已经存在，说明之前已经完成过 OAuth 注册和邀请码验证。
-            // 此时视为「登录」，直接建立会话并告知前端可以跳转到登录/选服页面。
             delete req.session.oauthPendingUser;
             req.session.userHandle = existingUser.handle;
 
@@ -1092,6 +1088,17 @@ app.post('/oauth/invite', async (req, res) => {
             });
         }
         
+        // 原子地验证并消耗邀请码（防止并发重复使用）
+        if (config.requireInviteCode && inviteCode) {
+            const inviteResult = InviteCodeService.validateAndUse(inviteCode.trim().toUpperCase(), handle);
+            if (!inviteResult.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: inviteResult.message || '邀请码无效',
+                });
+            }
+        }
+
         // 创建新用户 (本地)
         const defaultPassword = oauthService.getDefaultPassword();
         
@@ -1104,16 +1111,11 @@ app.post('/oauth/invite', async (req, res) => {
             name: displayName,
             password: defaultPassword,
             ip: clientIp,
-            email: verifiedEmail, // 存储验证后的邮箱
+            email: verifiedEmail,
             inviteCode: inviteCode ? inviteCode.trim().toUpperCase() : null,
             registrationMethod: `oauth:${provider}`,
             registrationStatus: 'pending_selection'
         });
-
-        // 标记邀请码为已使用
-        if (config.requireInviteCode && inviteCode) {
-            InviteCodeService.use(inviteCode.trim().toUpperCase(), newUser.handle);
-        }
 
         const timestamp = new Date().toISOString();
         console.info(`[OAuth注册审计] 时间 ${timestamp}，IP ${clientIp}，提供商 ${provider}，用户名 ${newUser.handle}，邮箱 ${verifiedEmail || '无'}，邀请码 ${inviteCode ? inviteCode.trim().toUpperCase() : '无'}`);

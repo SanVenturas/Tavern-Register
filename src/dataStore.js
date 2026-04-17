@@ -16,6 +16,31 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 /**
+ * 进程内文件写锁，防止并发读-改-写导致数据丢失
+ */
+const _fileLocks = new Map();
+
+function _withFileLock(filePath, fn) {
+    const execute = () => {
+        const result = fn();
+        return result;
+    };
+
+    const prev = _fileLocks.get(filePath) || Promise.resolve();
+    const next = prev.then(execute, execute);
+    _fileLocks.set(filePath, next.then(() => {}, () => {}));
+    return next;
+}
+
+/**
+ * 在文件锁保护下执行读-改-写操作（同步版本，用于现有同步 API）
+ */
+function withFileLockSync(filePath, fn) {
+    // 对于同步调用，使用简单的标记锁（Node.js 单线程保证同步代码不会交错）
+    return fn();
+}
+
+/**
  * 读取 JSON 文件
  */
 function readJsonFile(filePath, defaultValue = []) {
@@ -49,40 +74,46 @@ export class DataStore {
      * 记录注册用户
      */
     static recordUser(userInfo) {
-        const users = readJsonFile(USERS_FILE, []);
-        const record = {
-            ...userInfo,
-            registeredAt: new Date().toISOString(),
-            id: users.length + 1,
-            registrationStatus: userInfo.registrationStatus || 'pending_selection', // pending_selection, active
-            serverId: userInfo.serverId || null,
-        };
-        users.push(record);
-        writeJsonFile(USERS_FILE, users);
-        return record;
+        return _withFileLock(USERS_FILE, () => {
+            const users = readJsonFile(USERS_FILE, []);
+            const record = {
+                ...userInfo,
+                registeredAt: new Date().toISOString(),
+                id: users.length + 1,
+                registrationStatus: userInfo.registrationStatus || 'pending_selection',
+                serverId: userInfo.serverId || null,
+            };
+            users.push(record);
+            writeJsonFile(USERS_FILE, users);
+            return record;
+        });
     }
 
     /**
      * 更新用户状态
      */
     static updateUser(handle, updates) {
-        const users = readJsonFile(USERS_FILE, []);
-        const userIndex = users.findIndex(u => u.handle === handle);
-        if (userIndex === -1) return null;
+        return _withFileLock(USERS_FILE, () => {
+            const users = readJsonFile(USERS_FILE, []);
+            const userIndex = users.findIndex(u => u.handle === handle);
+            if (userIndex === -1) return null;
 
-        users[userIndex] = { ...users[userIndex], ...updates };
-        writeJsonFile(USERS_FILE, users);
-        return users[userIndex];
+            users[userIndex] = { ...users[userIndex], ...updates };
+            writeJsonFile(USERS_FILE, users);
+            return users[userIndex];
+        });
     }
 
     /**
      * 删除用户
      */
     static deleteUser(handle) {
-        const users = readJsonFile(USERS_FILE, []);
-        const filtered = users.filter(u => u.handle !== handle);
-        writeJsonFile(USERS_FILE, filtered);
-        return filtered.length < users.length;
+        return _withFileLock(USERS_FILE, () => {
+            const users = readJsonFile(USERS_FILE, []);
+            const filtered = users.filter(u => u.handle !== handle);
+            writeJsonFile(USERS_FILE, filtered);
+            return filtered.length < users.length;
+        });
     }
 
     /**
@@ -144,32 +175,32 @@ export class DataStore {
      * 添加服务器
      */
     static addServer(serverInfo) {
-        const servers = readJsonFile(SERVERS_FILE, []);
-        const newServer = {
-            id: servers.length > 0 ? Math.max(...servers.map(s => s.id)) + 1 : 1,
-            // 基础信息
-            name: serverInfo.name,
-            url: serverInfo.url,
-            admin_username: serverInfo.admin_username,
-            admin_password: serverInfo.admin_password,
-            localDataRoot: serverInfo.localDataRoot || '',
-            storageLimitValue: serverInfo.storageLimitValue ?? null,
-            storageLimitUnit: serverInfo.storageLimitUnit || 'mb',
-            storageLimitBytes: serverInfo.storageLimitBytes ?? null,
-            storageCheckIntervalMinutes: serverInfo.storageCheckIntervalMinutes ?? 5,
-            // 展示信息（可选）
-            description: serverInfo.description || '',      // 服务器描述
-            provider: serverInfo.provider || '',          // 服务器提供方
-            maintainer: serverInfo.maintainer || '',      // 维护者
-            contact: serverInfo.contact || '',            // 联系方式
-            announcement: serverInfo.announcement || '',  // 公告
-            createdAt: new Date().toISOString(),
-            isActive: true,
-            registrationPaused: false,                     // 是否暂停注册
-        };
-        servers.push(newServer);
-        writeJsonFile(SERVERS_FILE, servers);
-        return newServer;
+        return _withFileLock(SERVERS_FILE, () => {
+            const servers = readJsonFile(SERVERS_FILE, []);
+            const newServer = {
+                id: servers.length > 0 ? Math.max(...servers.map(s => s.id)) + 1 : 1,
+                name: serverInfo.name,
+                url: serverInfo.url,
+                admin_username: serverInfo.admin_username,
+                admin_password: serverInfo.admin_password,
+                localDataRoot: serverInfo.localDataRoot || '',
+                storageLimitValue: serverInfo.storageLimitValue ?? null,
+                storageLimitUnit: serverInfo.storageLimitUnit || 'mb',
+                storageLimitBytes: serverInfo.storageLimitBytes ?? null,
+                storageCheckIntervalMinutes: serverInfo.storageCheckIntervalMinutes ?? 5,
+                description: serverInfo.description || '',
+                provider: serverInfo.provider || '',
+                maintainer: serverInfo.maintainer || '',
+                contact: serverInfo.contact || '',
+                announcement: serverInfo.announcement || '',
+                createdAt: new Date().toISOString(),
+                isActive: true,
+                registrationPaused: false,
+            };
+            servers.push(newServer);
+            writeJsonFile(SERVERS_FILE, servers);
+            return newServer;
+        });
     }
 
     /**
@@ -224,48 +255,54 @@ export class DataStore {
      * 更新服务器
      */
     static updateServer(id, updates) {
-        const servers = readJsonFile(SERVERS_FILE, []);
-        const targetId = Number(id);
-        const index = servers.findIndex(s => Number(s.id) === targetId);
-        if (index === -1) return null;
+        return _withFileLock(SERVERS_FILE, () => {
+            const servers = readJsonFile(SERVERS_FILE, []);
+            const targetId = Number(id);
+            const index = servers.findIndex(s => Number(s.id) === targetId);
+            if (index === -1) return null;
 
-        servers[index] = { ...servers[index], ...updates };
-        writeJsonFile(SERVERS_FILE, servers);
-        return servers[index];
+            servers[index] = { ...servers[index], ...updates };
+            writeJsonFile(SERVERS_FILE, servers);
+            return servers[index];
+        });
     }
 
     /**
      * 删除服务器
      */
     static deleteServer(id) {
-        const servers = readJsonFile(SERVERS_FILE, []);
-        const targetId = Number(id);
-        const filtered = servers.filter(s => Number(s.id) !== targetId);
-        writeJsonFile(SERVERS_FILE, filtered);
-        return filtered.length < servers.length;
+        return _withFileLock(SERVERS_FILE, () => {
+            const servers = readJsonFile(SERVERS_FILE, []);
+            const targetId = Number(id);
+            const filtered = servers.filter(s => Number(s.id) !== targetId);
+            writeJsonFile(SERVERS_FILE, filtered);
+            return filtered.length < servers.length;
+        });
     }
 
     /**
      * 添加邀请码
      */
     static addInviteCode(code, createdBy = 'admin', maxUses = 1, expiresAt = null) {
-        const codes = readJsonFile(INVITE_CODES_FILE, []);
-        const inviteCode = {
-            code,
-            createdBy,
-            createdAt: new Date().toISOString(),
-            maxUses,
-            usedCount: 0,
-            expiresAt,
-            isActive: true,
-        };
-        codes.push(inviteCode);
-        writeJsonFile(INVITE_CODES_FILE, codes);
-        return inviteCode;
+        return _withFileLock(INVITE_CODES_FILE, () => {
+            const codes = readJsonFile(INVITE_CODES_FILE, []);
+            const inviteCode = {
+                code,
+                createdBy,
+                createdAt: new Date().toISOString(),
+                maxUses,
+                usedCount: 0,
+                expiresAt,
+                isActive: true,
+            };
+            codes.push(inviteCode);
+            writeJsonFile(INVITE_CODES_FILE, codes);
+            return inviteCode;
+        });
     }
 
     /**
-     * 验证邀请码
+     * 验证邀请码（仅查询，不修改）
      */
     static validateInviteCode(code) {
         const codes = readJsonFile(INVITE_CODES_FILE, []);
@@ -275,7 +312,6 @@ export class DataStore {
             return { valid: false, message: '邀请码不存在或已失效' };
         }
 
-        // 检查是否过期
         if (inviteCode.expiresAt) {
             const expiresAt = new Date(inviteCode.expiresAt);
             if (expiresAt < new Date()) {
@@ -283,7 +319,6 @@ export class DataStore {
             }
         }
 
-        // 检查使用次数
         if (inviteCode.usedCount >= inviteCode.maxUses) {
             return { valid: false, message: '邀请码使用次数已达上限' };
         }
@@ -292,32 +327,75 @@ export class DataStore {
     }
 
     /**
-     * 使用邀请码
+     * 原子地验证并消耗邀请码，防止并发请求重复使用同一邀请码
+     */
+    static validateAndUseInviteCode(code, usedBy) {
+        return _withFileLock(INVITE_CODES_FILE, () => {
+            const codes = readJsonFile(INVITE_CODES_FILE, []);
+            const inviteCode = codes.find(c => c.code === code && c.isActive);
+
+            if (!inviteCode) {
+                return { valid: false, message: '邀请码不存在或已失效' };
+            }
+
+            if (inviteCode.expiresAt) {
+                const expiresAt = new Date(inviteCode.expiresAt);
+                if (expiresAt < new Date()) {
+                    return { valid: false, message: '邀请码已过期' };
+                }
+            }
+
+            if (inviteCode.usedCount >= inviteCode.maxUses) {
+                return { valid: false, message: '邀请码使用次数已达上限' };
+            }
+
+            // 验证通过，原子地消耗
+            inviteCode.usedCount += 1;
+            if (!inviteCode.usedBy) {
+                inviteCode.usedBy = [];
+            }
+            inviteCode.usedBy.push({
+                handle: usedBy,
+                usedAt: new Date().toISOString(),
+            });
+
+            if (inviteCode.usedCount >= inviteCode.maxUses) {
+                inviteCode.isActive = false;
+            }
+
+            writeJsonFile(INVITE_CODES_FILE, codes);
+            return { valid: true, inviteCode };
+        });
+    }
+
+    /**
+     * 使用邀请码（保留供向后兼容，推荐使用 validateAndUseInviteCode）
      */
     static useInviteCode(code, usedBy) {
-        const codes = readJsonFile(INVITE_CODES_FILE, []);
-        const inviteCode = codes.find(c => c.code === code && c.isActive);
+        return _withFileLock(INVITE_CODES_FILE, () => {
+            const codes = readJsonFile(INVITE_CODES_FILE, []);
+            const inviteCode = codes.find(c => c.code === code && c.isActive);
 
-        if (!inviteCode) {
-            return false;
-        }
+            if (!inviteCode) {
+                return false;
+            }
 
-        inviteCode.usedCount += 1;
-        if (!inviteCode.usedBy) {
-            inviteCode.usedBy = [];
-        }
-        inviteCode.usedBy.push({
-            handle: usedBy,
-            usedAt: new Date().toISOString(),
+            inviteCode.usedCount += 1;
+            if (!inviteCode.usedBy) {
+                inviteCode.usedBy = [];
+            }
+            inviteCode.usedBy.push({
+                handle: usedBy,
+                usedAt: new Date().toISOString(),
+            });
+
+            if (inviteCode.usedCount >= inviteCode.maxUses) {
+                inviteCode.isActive = false;
+            }
+
+            writeJsonFile(INVITE_CODES_FILE, codes);
+            return true;
         });
-
-        // 如果达到最大使用次数，禁用邀请码
-        if (inviteCode.usedCount >= inviteCode.maxUses) {
-            inviteCode.isActive = false;
-        }
-
-        writeJsonFile(INVITE_CODES_FILE, codes);
-        return true;
     }
 
     /**
@@ -331,23 +409,27 @@ export class DataStore {
      * 删除邀请码
      */
     static deleteInviteCode(code) {
-        const codes = readJsonFile(INVITE_CODES_FILE, []);
-        const filtered = codes.filter(c => c.code !== code);
-        writeJsonFile(INVITE_CODES_FILE, filtered);
-        return filtered.length < codes.length;
+        return _withFileLock(INVITE_CODES_FILE, () => {
+            const codes = readJsonFile(INVITE_CODES_FILE, []);
+            const filtered = codes.filter(c => c.code !== code);
+            writeJsonFile(INVITE_CODES_FILE, filtered);
+            return filtered.length < codes.length;
+        });
     }
 
     /**
      * 禁用/启用邀请码
      */
     static toggleInviteCode(code, isActive) {
-        const codes = readJsonFile(INVITE_CODES_FILE, []);
-        const inviteCode = codes.find(c => c.code === code);
-        if (inviteCode) {
-            inviteCode.isActive = isActive;
-            writeJsonFile(INVITE_CODES_FILE, codes);
-            return true;
-        }
-        return false;
+        return _withFileLock(INVITE_CODES_FILE, () => {
+            const codes = readJsonFile(INVITE_CODES_FILE, []);
+            const inviteCode = codes.find(c => c.code === code);
+            if (inviteCode) {
+                inviteCode.isActive = isActive;
+                writeJsonFile(INVITE_CODES_FILE, codes);
+                return true;
+            }
+            return false;
+        });
     }
 }
