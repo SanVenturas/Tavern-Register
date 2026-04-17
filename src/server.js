@@ -357,6 +357,15 @@ app.post('/register', async (req, res) => {
         const forwardedFor = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : '';
         const clientIp = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
         
+        // 检查是否有可用服务器
+        const activeServers = DataStore.getActiveServers().filter(s => !s.registrationPaused);
+        if (!activeServers.length) {
+            return res.status(503).json({
+                success: false,
+                message: '暂无可用服务器，请稍后再试',
+            });
+        }
+
         // IP 注册限制检查
         if (config.enableIpLimit) {
             if (DataStore.hasIpRegistered(clientIp)) {
@@ -908,6 +917,26 @@ app.get('/oauth/callback/:provider', async (req, res) => {
             return res.redirect('/select-server');
         }
         
+        // 检查是否有可用服务器
+        {
+            const activeServers = DataStore.getActiveServers().filter(s => !s.registrationPaused);
+            if (!activeServers.length) {
+                delete req.session.oauthState;
+                delete req.session.oauthProvider;
+                delete req.session.oauthBaseUrl;
+                return res.status(503).send(`
+                    <html>
+                        <head><title>暂无可用服务器</title></head>
+                        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+                            <h1>⚠️ 暂无可用服务器</h1>
+                            <p>暂无可用服务器，请稍后再试。</p>
+                            <a href="/" style="color: #667eea;">返回首页</a>
+                        </body>
+                    </html>
+                `);
+            }
+        }
+
         // IP 注册限制检查（新用户才检查）
         if (config.enableIpLimit) {
             if (DataStore.hasIpRegistered(clientIp)) {
@@ -1070,6 +1099,15 @@ app.post('/oauth/invite', async (req, res) => {
         }
     }
     
+    // 检查是否有可用服务器
+    const activeServersForOAuth = DataStore.getActiveServers().filter(s => !s.registrationPaused);
+    if (!activeServersForOAuth.length) {
+        return res.status(503).json({
+            success: false,
+            message: '暂无可用服务器，请稍后再试',
+        });
+    }
+
     try {
         const { handle, displayName, provider, ip: storedIp } = req.session.oauthPendingUser;
         
