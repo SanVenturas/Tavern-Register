@@ -20,7 +20,7 @@ TavernRegister 是一个极简的独立注册门户，可在不修改 SillyTaver
 ### 命令行安装
 ```bash
 
-git clone https://github.com/zhaiiker/Tavern-Register.git
+git clone https://github.com/SanVenturas/Tavern-Register.git
 cd Tavern-Register
 cp .env.example .env
 npm install
